@@ -2,25 +2,7 @@ import streamlit as st
 import pyodbc
 import pandas as pd
 import requests
-
 import streamlit.components.v1 as components
-
-
-def inject_onesignal_script():
-    app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
-    if app_id:
-        onesignal_js = f"""
-        <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-        <script>
-          window.OneSignalDeferred = window.OneSignalDeferred || [];
-          OneSignalDeferred.push(async function(OneSignal) {{
-            await OneSignal.init({{
-              appId: "{app_id}",
-            }});
-          }});
-        </script>
-        """
-        components.html(onesignal_js, height=0, width=0)
 
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
@@ -54,7 +36,42 @@ def get_db_connection():
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
 
-# --- 3. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL ---
+# --- 3. ONESIGNAL PROMPT SCRIPT (ΓΙΑ ΤΟΥΣ ΓΟΝΕΙΣ) ---
+def inject_onesignal_script():
+    app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
+    if app_id:
+        onesignal_js = f"""
+        <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+        <script>
+          window.OneSignalDeferred = window.OneSignalDeferred || [];
+          OneSignalDeferred.push(async function(OneSignal) {{
+            await OneSignal.init({{
+              appId: "{app_id}",
+              slidePromptOptions: {{
+                prompts: [
+                  {{
+                    type: "push",
+                    actionClass: "subscribe-action",
+                    text: {{
+                      actionButton: "Ενεργοποίηση",
+                      cancelButton: "Όχι τώρα",
+                      explanation: "Λάβετε αμέσως ειδοποιήσεις για νέες ανακοινώσεις του σχολείου στο κινητό σας.",
+                      message: "Θέλετε να ενεργοποιήσετε τις ειδοποιήσεις;"
+                    }}
+                  }}
+                ]
+              }}
+            }});
+            OneSignal.showSlidedownPrompt();
+          }});
+        </script>
+        <div style="padding: 10px; background-color: #e3f2fd; border-radius: 8px; text-align: center; margin-bottom: 10px;">
+            🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε «Ενεργοποίηση» στο παράθυρο που εμφανίζεται για να λαμβάνετε Push Notifications.
+        </div>
+        """
+        components.html(onesignal_js, height=80, width=None)
+
+# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
@@ -87,7 +104,7 @@ def send_onesignal_notification(title, message_text):
         st.error(f"Σφάλμα αποστολής Push: {e}")
         return False
 
-# --- 4. SESSION STATE ---
+# --- 5. SESSION STATE ---
 if "user_role" not in st.session_state:
     st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
@@ -98,7 +115,7 @@ def logout():
     st.session_state["user_info"] = None
     st.rerun()
 
-# --- 5. ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LOGIN) ---
+# --- 6. ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LOGIN) ---
 if st.session_state["user_role"] is None:
     st.title("💬 Σχολικό Portal Μηνυμάτων & Ενημερώσεων")
     st.subheader("Σύνδεση στο Σύστημα")
@@ -172,7 +189,7 @@ if st.session_state["user_role"] is None:
                     else:
                         st.error("❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία.")
 
-# --- 6. ΠΟΡΤΑΛ ΑΠΟΣТОΛΕΑ (ADMIN / TEACHER) ---
+# --- 7. ΠΟΡΤΑΛ ΑΠΟΣТОΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     st.sidebar.title("⚙️ Διαχείριση Αποστολών")
     st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
@@ -185,7 +202,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     else:
         admin_tab1 = st.container()
 
-    # TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ
+    # TAB 1: ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΩΝ
     with admin_tab1:
         st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
@@ -346,10 +363,13 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                         finally:
                             conn.close()
 
-# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
+# --- 8. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
     parent_id = st.session_state["user_info"]["id"]
     parent_name = st.session_state["user_info"]["name"]
+
+    # Ενεργοποίηση διαλόγου ειδοποιήσεων OneSignal
+    inject_onesignal_script()
 
     st.sidebar.title("💬 Portal Μηνυμάτων")
     st.sidebar.write(f"👤 Γονέας: **{parent_name}**")
