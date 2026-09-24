@@ -3,6 +3,25 @@ import pyodbc
 import pandas as pd
 import requests
 
+import streamlit.components.v1 as components
+
+
+def inject_onesignal_script():
+    app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
+    if app_id:
+        onesignal_js = f"""
+        <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+        <script>
+          window.OneSignalDeferred = window.OneSignalDeferred || [];
+          OneSignalDeferred.push(async function(OneSignal) {{
+            await OneSignal.init({{
+              appId: "{app_id}",
+            }});
+          }});
+        </script>
+        """
+        components.html(onesignal_js, height=0, width=0)
+
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
     page_title="Σχολικό Portal Μηνυμάτων",
