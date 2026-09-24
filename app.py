@@ -74,19 +74,35 @@ if st.session_state["user_role"] is None:
 
     # --- LOGIN ΑΠΟΣΤΟΛΕΑ / ADMIN ---
     with tab_admin:
-        with st.form("admin_login_form"):
-            username = st.text_input("Όνομα Χρήστη")
-            password = st.text_input("Κωδικός Πρόσβασης", type="password")
-            submit_admin = st.form_submit_button("Σύνδεση ως Αποστολέας")
+    with st.form("admin_login_form"):
+        username = st.text_input("Όνομα Χρήστη (Username)")
+        password = st.text_input("Κωδικός Πρόσβασης", type="password")
+        submit_admin = st.form_submit_button("Σύνδεση")
 
-            if submit_admin:
-                if username == "admin" and password == "admin123":
-                    st.session_state["user_role"] = "Admin"
-                    st.session_state["user_info"] = {"name": "Διεύθυνση / Εκπαιδευτικός"}
-                    st.success("Επιτυχής σύνδεση!")
+        if submit_admin:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                query = """
+                    SELECT UserID, FullName, Role 
+                    FROM Users 
+                    WHERE Username = ? AND PasswordHash = ? AND IsActive = 1
+                """
+                cursor.execute(query, (username, password))
+                user = cursor.fetchone()
+                conn.close()
+
+                if user:
+                    st.session_state["user_role"] = user[2]  # 'Admin' ή 'Teacher'
+                    st.session_state["user_info"] = {
+                        "id": user[0],
+                        "name": user[1],
+                        "role": user[2]
+                    }
+                    st.success(f"Καλώς ήρθατε, {user[1]}!")
                     st.rerun()
                 else:
-                    st.error("Λανθασμένα στοιχεία σύνδεσης.")
+                    st.error("Λανθασμένο όνομα χρήστη ή κωδικός πρόσβασης.")
 
     # --- LOGIN ΓΟΝΕΑ ---
     with tab_parent:
