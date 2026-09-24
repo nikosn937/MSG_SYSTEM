@@ -83,7 +83,7 @@ def inject_onesignal_script():
     """
     # Δίνουμε επαρκές ύψος στο iframe για να χωράει το αναδυόμενο παράθυρο του Bell Button
     components.html(onesignal_html, height=120)
- --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
