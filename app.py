@@ -40,16 +40,44 @@ def get_db_connection():
 def inject_onesignal_script():
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
     if app_id:
-        # Χρήση Native Streamlit UI αντί για components.html iframe
-        with st.container():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.info("🔔 **Ειδοποιήσεις Σχολείου:** Ενεργοποιήστε τις ειδοποιήσεις για να λαμβάνετε άμεσα τις ανακοινώσεις.")
-            with col2:
-                # Δημιουργία συνδέσμου που ανοίγει σε νέα καρτέλα εκτός iframe
-                target_url = f"https://onesignal.com/subscribe?app_id={app_id}"
-                st.link_button("🔔 Ενεργοποίηση", target_url, use_container_width=True)
-# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+        onesignal_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+          <script>
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(async function(OneSignal) {{
+              await OneSignal.init({{
+                appId: "{app_id}",
+                allowLocalhostAsSecureOrigin: true,
+                slidedown: {{
+                  prompts: [
+                    {{
+                      type: "push",
+                      autoPrompt: true,
+                      text: {{
+                        actionMessage: "Θέλετε να λαμβάνετε άμεσες ειδοποιήσεις και ανακοινώσεις από το σχολείο;",
+                        acceptButton: "Ενεργοποίηση",
+                        cancelButton: "Όχι ευχαριστώ"
+                      }},
+                      delay: {{
+                        pageViews: 1,
+                        timeDelay: 1
+                      }}
+                    }}
+                  ]
+                }}
+              }});
+            }});
+          </script>
+        </head>
+        <body>
+        </body>
+        </html>
+        """
+        # Χρήση μηδενικού ύψους καθώς το Slidedown Prompt εμφανίζεται αυτόματα στην οθόνη
+        components.html(onesignal_html, height=0)# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
