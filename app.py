@@ -40,7 +40,7 @@ def get_db_connection():
 def inject_onesignal_script():
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
     if app_id:
-        onesignal_js = f"""
+        onesignal_html = f"""
         <!DOCTYPE html>
         <html>
         <head>
@@ -50,59 +50,56 @@ def inject_onesignal_script():
             OneSignalDeferred.push(async function(OneSignal) {{
               await OneSignal.init({{
                 appId: "{app_id}",
-                allowLocalhostAsSecureOrigin: true,
+                allowLocalhostAsSecureOrigin: true
               }});
             }});
 
-            async function subscribeUser() {{
+            async function requestPush() {{
               window.OneSignalDeferred.push(async function(OneSignal) {{
                 try {{
                   // Αίτημα άδειας στον browser
                   await OneSignal.Notifications.requestPermission();
-                }} catch(e) {{
-                  console.log(e);
+                }} catch (e) {{
+                  console.error("OneSignal Error:", e);
                 }}
               }});
             }}
           </script>
           <style>
-            .push-card {{
+            body {{ margin: 0; padding: 0; font-family: sans-serif; background: transparent; }}
+            .box {{
               background-color: #e3f2fd;
               border: 1px solid #90caf9;
-              border-radius: 10px;
-              padding: 12px 16px;
-              text-align: center;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              border-radius: 8px;
+              padding: 10px 15px;
               display: flex;
               align-items: center;
               justify-content: space-between;
-              flex-wrap: wrap;
               gap: 10px;
             }}
-            .push-btn {{
+            .btn {{
               background-color: #1976d2;
               color: white;
               border: none;
-              padding: 8px 16px;
-              font-size: 14px;
+              padding: 8px 14px;
+              font-size: 13px;
               font-weight: bold;
-              border-radius: 6px;
+              border-radius: 5px;
               cursor: pointer;
-              transition: background-color 0.2s;
             }}
-            .push-btn:hover {{
-              background-color: #1565c0;
-            }}
+            .btn:hover {{ background-color: #1565c0; }}
           </style>
         </head>
-        <body style="margin:0; padding:0; background:transparent;">
-          <div class="push-card">
-            <span>🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε το κουμπί για να ενεργοποιήσετε τις ειδοποιήσεις στο κινητό σας.</span>
-            <button class="push-btn" onclick="subscribeUser()">🔔 Ενεργοποίηση</button>
+        <body>
+          <div class="box">
+            <span>🔔 <b>Ενεργοποίηση Ειδοποιήσεων:</b> Πατήστε το κουμπί για να λαμβάνετε ανακοινώσεις.</span>
+            <button class="btn" onclick="requestPush()">🔔 Ενεργοποίηση</button>
           </div>
         </body>
         </html>
         """
+        # Το κρίσιμο σημείο: Δίνουμε άδεια notifications στο iframe του Streamlit!
+        components.html(onesignal_html, height=75)
         components.html(onesignal_js, height=70)
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
