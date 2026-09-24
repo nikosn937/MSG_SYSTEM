@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 2. ΣΥΝΔΕΣΗ ΜΕ ΒΑΣΗ ΔΕΔΟΜΕΝΩΝ ---
+# --- 2. ΣΥΝΔΕΣΗ ΜΕ ΑΠΟΜΑΚΡΥΣΜΕΝΟ SQL SERVER (FreeTDS) ---
 def get_db_connection():
     try:
         server = st.secrets["DB_SERVER"]
@@ -19,7 +19,6 @@ def get_db_connection():
         user = st.secrets["DB_USER"]
         password = st.secrets["DB_PASSWORD"]
         
-        # Σύνδεση με τον FreeTDS driver που εγκαθιστά το tdsodbc
         conn_str = (
             "DRIVER={FreeTDS};"
             f"SERVER={server};"
@@ -27,7 +26,7 @@ def get_db_connection():
             f"DATABASE={database};"
             f"UID={user};"
             f"PWD={password};"
-            "TDS_Version=7.4;"  # Έκδοση πρωτοκόλλου για MS SQL Server
+            "TDS_Version=7.4;"
         )
         
         conn = pyodbc.connect(conn_str)
@@ -70,41 +69,41 @@ if st.session_state["user_role"] is None:
     st.title("💬 Σχολικό Portal Μηνυμάτων & Ενημερώσεων")
     st.subheader("Σύνδεση στο Σύστημα")
 
-    tab_admin, tab_parent = st.tabs(["👨‍🏫 Αποστολέας / Διαχειριστής", "👨‍👩‍👧 Γονέας / Κηδεμόνας"])
+    tab_admin, tab_parent = st.tabs(["👨‍🏫 Αποστολέας / Εκπαιδευτικός", "👨‍👩‍👧 Γονέας / Κηδεμόνας"])
 
-# --- LOGIN ΑΠΟΣΤΟΛΕΑ / ADMIN ---
-with tab_admin:
-    with st.form("admin_login_form"):
-        username = st.text_input("Όνομα Χρήστη (Username)")
-        password = st.text_input("Κωδικός Πρόσβασης", type="password")
-        submit_admin = st.form_submit_button("Σύνδεση")
+    # --- LOGIN ΑΠΟΣΤΟΛΕΑ / ADMIN / TEACHER (Από τον πίνακα Users) ---
+    with tab_admin:
+        with st.form("admin_login_form"):
+            username = st.text_input("Όνομα Χρήστη (Username)")
+            password = st.text_input("Κωδικός Πρόσβασης", type="password")
+            submit_admin = st.form_submit_button("Σύνδεση")
 
-        if submit_admin:
-            conn = get_db_connection()
-            if conn:
-                cursor = conn.cursor()
-                query = """
-                    SELECT UserID, FullName, Role 
-                    FROM Users 
-                    WHERE Username = ? AND PasswordHash = ? AND IsActive = 1
-                """
-                cursor.execute(query, (username, password))
-                user = cursor.fetchone()
-                conn.close()
+            if submit_admin:
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    query = """
+                        SELECT UserID, FullName, Role 
+                        FROM Users 
+                        WHERE Username = ? AND PasswordHash = ? AND IsActive = 1
+                    """
+                    cursor.execute(query, (username, password))
+                    user = cursor.fetchone()
+                    conn.close()
 
-                if user:
-                    st.session_state["user_role"] = user[2]  # 'Admin' ή 'Teacher'
-                    st.session_state["user_info"] = {
-                        "id": user[0],
-                        "name": user[1],
-                        "role": user[2]
-                    }
-                    st.success(f"Καλώς ήρθατε, {user[1]}!")
-                    st.rerun()
-                else:
-                    st.error("Λανθασμένο όνομα χρήστη ή κωδικός πρόσβασης.")
+                    if user:
+                        st.session_state["user_role"] = user[2]  # 'Admin' ή 'Teacher'
+                        st.session_state["user_info"] = {
+                            "id": user[0],
+                            "name": user[1],
+                            "role": user[2]
+                        }
+                        st.success(f"Καλώς ήρθατε, {user[1]}!")
+                        st.rerun()
+                    else:
+                        st.error("Λανθασμένα στοιχεία σύνδεσης.")
 
-    # --- LOGIN ΓΟΝΕΑ ---
+    # --- LOGIN ΓΟΝΕΑ (Από τον πίνακα Parents) ---
     with tab_parent:
         with st.form("parent_login_form"):
             phone = st.text_input("Αριθμός Τηλεφώνου", placeholder="+35799XXXXXX")
@@ -136,10 +135,11 @@ with tab_admin:
                     else:
                         st.error("Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία.")
 
-# --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN) ---
-elif st.session_state["user_role"] == "Admin":
+# --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
+elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     st.sidebar.title("⚙️ Διαχείριση Αποστολών")
     st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
+    st.sidebar.write(f"🔰 Ρόλος: **{st.session_state['user_info']['role']}**")
     if st.sidebar.button("🚪 Αποσύνδεση"):
         logout()
 
@@ -238,7 +238,6 @@ elif st.session_state["user_role"] == "Parent":
 
     conn = get_db_connection()
     if conn:
-        # Ανάκτηση μηνυμάτων που αφορούν τα τμήματα των παιδιών του γονέα ή όλο το σχολείο (ALL)
         query_messages = """
             SELECT DISTINCT A.AnnouncementID, A.Title, A.Content, A.SentBy, A.CreatedAt, C.ClassName,
                    R.ReadAt
@@ -267,7 +266,6 @@ elif st.session_state["user_role"] == "Parent":
                     st.write(row['Content'])
                     st.caption(f"Αποστολέας: {row['SentBy']} | Τμήμα: {row['ClassName'] if row['ClassName'] else 'Όλα'}")
 
-                    # Επιβεβαίωση Ανάγνωσης (Read Receipt)
                     if not is_read:
                         if st.button("👁️ Σήμανση ως Αναγνωσμένο", key=f"read_{ann_id}"):
                             conn_receipt = get_db_connection()
