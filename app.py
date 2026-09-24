@@ -108,19 +108,21 @@ if st.session_state["user_role"] is None:
             submit_parent = st.form_submit_button("Σύνδεση ως Γονέας")
 
             if submit_parent:
-                # Καθαρισμός τηλεφώνου από +357, κενά και παύλες
+                # Καθαρισμός εισόδου χρήστη
                 clean_phone = phone.strip().replace("+357", "").replace(" ", "").replace("-", "")
                 clean_pass = password.strip().replace("+357", "").replace(" ", "").replace("-", "")
 
                 conn = get_db_connection()
                 if conn:
                     cursor = conn.cursor()
+                    
+                    # Αναζήτηση με καθαρισμό χαρακτήρων και υποστήριξη αν το IsActive είναι NULL
                     query = """
-                        SELECT ParentID, FirstName, LastName, Phone, PasswordHash 
+                        SELECT ParentID, FirstName, LastName, Phone 
                         FROM Parents 
-                        WHERE REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', '') = ? 
-                          AND REPLACE(REPLACE(REPLACE(PasswordHash, '+357', ''), ' ', ''), '-', '') = ?
-                          AND IsActive = 1
+                        WHERE LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', ''))) = ? 
+                          AND LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(PasswordHash, '+357', ''), ' ', ''), '-', ''))) = ?
+                          AND (IsActive = 1 OR IsActive IS NULL)
                     """
                     cursor.execute(query, (clean_phone, clean_pass))
                     parent = cursor.fetchone()
@@ -136,8 +138,7 @@ if st.session_state["user_role"] is None:
                         st.success(f"Καλώς ήρθατε, {parent[1]}!")
                         st.rerun()
                     else:
-                        st.error("Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία.")
-
+                        st.error("❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία.")
 # --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     st.sidebar.title("⚙️ Διαχείριση Αποστολών")
