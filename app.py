@@ -50,40 +50,67 @@ def inject_onesignal_script():
           await OneSignal.init({{
             appId: "{app_id}",
             safari_web_id: "web.onesignal.auto.12f40fc9-13d7-4ca9-8e4a-0a7d50f473bf",
-            allowLocalhostAsSecureOrigin: true,
-            notifyButton: {{
-              enable: true,
-              size: 'medium',
-              theme: 'default',
-              position: 'bottom-right',
-              text: {{
-                'tip.state.unsubscribed': 'Εγγραφή στις ειδοποιήσεις',
-                'tip.state.subscribed': 'Είστε εγγεγραμμένος στις ειδοποιήσεις',
-                'tip.state.blocked': 'Έχετε αποκλείσει τις ειδοποιήσεις',
-                'message.action.subscribed': 'Ευχαριστούμε για την εγγραφή!',
-                'message.action.resubscribed': 'Είστε πάλι εγγεγραμμένος!',
-                'message.action.unsubscribed': 'Δεν θα λαμβάνετε πλέον ειδοποιήσεις',
-                'dialog.main.title': 'Διαχείριση Ειδοποιήσεων',
-                'dialog.main.button.subscribe': 'ΕΓΓΡΑΦΗ',
-                'dialog.main.button.unsubscribe': 'ΑΚΥΡΩΣΗ ΕΓΓΡΑΦΗΣ',
-                'dialog.blocked.title': 'Ξεμπλοκάρισμα Ειδοποιήσεων',
-                'dialog.blocked.message': 'Ακολουθήστε τις οδηγίες για να επιτρέψετε τις ειδοποιήσεις:'
-              }}
-            }}
+            allowLocalhostAsSecureOrigin: true
           }});
         }});
+
+        async function triggerPush() {{
+          window.OneSignalDeferred.push(async function(OneSignal) {{
+            try {{
+              await OneSignal.Notifications.requestPermission();
+            }} catch(e) {{
+              alert("Επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του browser σας.");
+            }}
+          }});
+        }}
       </script>
       <style>
-        body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; }}
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ 
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+          background: transparent; 
+        }}
+        .banner {{
+          background-color: #f0f7ff;
+          border: 1px solid #b3d8ff;
+          border-radius: 8px;
+          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }}
+        .banner-text {{
+          color: #1e3a8a;
+          font-size: 13px;
+          font-weight: 500;
+        }}
+        .btn-push {{
+          background-color: #1d4ed8;
+          color: #ffffff;
+          border: none;
+          padding: 7px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          border-radius: 6px;
+          cursor: pointer;
+          white-space: nowrap;
+        }}
+        .btn-push:hover {{
+          background-color: #1e40af;
+        }}
       </style>
     </head>
     <body>
+      <div class="banner">
+        <span class="banner-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε για ενεργοποίηση ανακοινώσεων στη συσκευή σας.</span>
+        <button class="btn-push" onclick="triggerPush()">🔔 Ενεργοποίηση</button>
+      </div>
     </body>
     </html>
     """
-    # Δίνουμε επαρκές ύψος στο iframe για να χωράει το αναδυόμενο παράθυρο του Bell Button
-    components.html(onesignal_html, height=120)
-# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+    # Δίνουμε ακριβές ύψος 55px για να εμφανίζεται η μπάρα καθαρά χωρίς κενά
+    components.html(onesignal_html, height=55)# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
