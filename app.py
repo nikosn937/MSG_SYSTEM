@@ -13,23 +13,21 @@ st.set_page_config(
 # --- 2. ΣΥΝΔΕΣΗ ΜΕ ΒΑΣΗ ΔΕΔΟΜΕΝΩΝ ---
 def get_db_connection():
     try:
-        driver = st.secrets["DB_DRIVER"]
         server = st.secrets["DB_SERVER"]
         port = st.secrets.get("DB_PORT", "1433")
         database = st.secrets["DB_NAME"]
         user = st.secrets["DB_USER"]
         password = st.secrets["DB_PASSWORD"]
         
-        # Connection string για Remote SQL Server με SQL Authentication
+        # Σύνδεση με τον FreeTDS driver που εγκαθιστά το tdsodbc
         conn_str = (
-            f"DRIVER={{{driver}}};"
-            f"SERVER={server},{port};"
+            "DRIVER={FreeTDS};"
+            f"SERVER={server};"
+            f"PORT={port};"
             f"DATABASE={database};"
             f"UID={user};"
             f"PWD={password};"
-            f"Encrypt=yes;"                  # Ενεργοποίηση SSL/TLS encryption
-            f"TrustServerCertificate=yes;"   # Για αποφυγή σφαλμάτων πιστοποιητικού
-            f"Connection Timeout=30;"
+            "TDS_Version=7.4;"  # Έκδοση πρωτοκόλλου για MS SQL Server
         )
         
         conn = pyodbc.connect(conn_str)
