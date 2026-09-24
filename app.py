@@ -57,7 +57,6 @@ def inject_onesignal_script():
             async function requestPush() {{
               window.OneSignalDeferred.push(async function(OneSignal) {{
                 try {{
-                  // Αίτημα άδειας στον browser
                   await OneSignal.Notifications.requestPermission();
                 }} catch (e) {{
                   console.error("OneSignal Error:", e);
@@ -98,9 +97,8 @@ def inject_onesignal_script():
         </body>
         </html>
         """
-        # Το κρίσιμο σημείο: Δίνουμε άδεια notifications στο iframe του Streamlit!
+        # Διόρθωση: Χρήση της μεταβλητής onesignal_html
         components.html(onesignal_html, height=75)
-        components.html(onesignal_js, height=70)
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
