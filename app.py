@@ -35,49 +35,55 @@ def get_db_connection():
     except Exception as e:
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
-
-# --- 3. ONESIGNAL PROMPT SCRIPT (ΓΙΑ ΤΟΥΣ ΓΟΝΕΙΣ) ---
+# --- 3. ONESIGNAL PROMPT SCRIPT ---
 def inject_onesignal_script():
-    app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
-    if app_id:
-        onesignal_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-          <script>
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(async function(OneSignal) {{
-              await OneSignal.init({{
-                appId: "{app_id}",
-                allowLocalhostAsSecureOrigin: true,
-                slidedown: {{
-                  prompts: [
-                    {{
-                      type: "push",
-                      autoPrompt: true,
-                      text: {{
-                        actionMessage: "Θέλετε να λαμβάνετε άμεσες ειδοποιήσεις και ανακοινώσεις από το σχολείο;",
-                        acceptButton: "Ενεργοποίηση",
-                        cancelButton: "Όχι ευχαριστώ"
-                      }},
-                      delay: {{
-                        pageViews: 1,
-                        timeDelay: 1
-                      }}
-                    }}
-                  ]
-                }}
-              }});
-            }});
-          </script>
-        </head>
-        <body>
-        </body>
-        </html>
-        """
-        # Χρήση μηδενικού ύψους καθώς το Slidedown Prompt εμφανίζεται αυτόματα στην οθόνη
-        components.html(onesignal_html, height=0)# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+    app_id = st.secrets.get("ONESIGNAL_APP_ID", "2ad617fe-461f-43bf-9755-d9cf5f994634")
+    
+    onesignal_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+      <script>
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        OneSignalDeferred.push(async function(OneSignal) {{
+          await OneSignal.init({{
+            appId: "{app_id}",
+            safari_web_id: "web.onesignal.auto.12f40fc9-13d7-4ca9-8e4a-0a7d50f473bf",
+            allowLocalhostAsSecureOrigin: true,
+            notifyButton: {{
+              enable: true,
+              size: 'medium',
+              theme: 'default',
+              position: 'bottom-right',
+              text: {{
+                'tip.state.unsubscribed': 'Εγγραφή στις ειδοποιήσεις',
+                'tip.state.subscribed': 'Είστε εγγεγραμμένος στις ειδοποιήσεις',
+                'tip.state.blocked': 'Έχετε αποκλείσει τις ειδοποιήσεις',
+                'message.action.subscribed': 'Ευχαριστούμε για την εγγραφή!',
+                'message.action.resubscribed': 'Είστε πάλι εγγεγραμμένος!',
+                'message.action.unsubscribed': 'Δεν θα λαμβάνετε πλέον ειδοποιήσεις',
+                'dialog.main.title': 'Διαχείριση Ειδοποιήσεων',
+                'dialog.main.button.subscribe': 'ΕΓΓΡΑΦΗ',
+                'dialog.main.button.unsubscribe': 'ΑΚΥΡΩΣΗ ΕΓΓΡΑΦΗΣ',
+                'dialog.blocked.title': 'Ξεμπλοκάρισμα Ειδοποιήσεων',
+                'dialog.blocked.message': 'Ακολουθήστε τις οδηγίες για να επιτρέψετε τις ειδοποιήσεις:'
+              }}
+            }}
+          }});
+        }});
+      </script>
+      <style>
+        body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; }}
+      </style>
+    </head>
+    <body>
+    </body>
+    </html>
+    """
+    # Δίνουμε επαρκές ύψος στο iframe για να χωράει το αναδυόμενο παράθυρο του Bell Button
+    components.html(onesignal_html, height=120)
+ --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
