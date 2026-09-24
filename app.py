@@ -41,36 +41,69 @@ def inject_onesignal_script():
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
     if app_id:
         onesignal_js = f"""
-        <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-        <script>
-          window.OneSignalDeferred = window.OneSignalDeferred || [];
-          OneSignalDeferred.push(async function(OneSignal) {{
-            await OneSignal.init({{
-              appId: "{app_id}",
-              slidePromptOptions: {{
-                prompts: [
-                  {{
-                    type: "push",
-                    actionClass: "subscribe-action",
-                    text: {{
-                      actionButton: "Ενεργοποίηση",
-                      cancelButton: "Όχι τώρα",
-                      explanation: "Λάβετε αμέσως ειδοποιήσεις για νέες ανακοινώσεις του σχολείου στο κινητό σας.",
-                      message: "Θέλετε να ενεργοποιήσετε τις ειδοποιήσεις;"
-                    }}
-                  }}
-                ]
-              }}
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+          <script>
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(async function(OneSignal) {{
+              await OneSignal.init({{
+                appId: "{app_id}",
+                allowLocalhostAsSecureOrigin: true,
+              }});
             }});
-            OneSignal.showSlidedownPrompt();
-          }});
-        </script>
-        <div style="padding: 10px; background-color: #e3f2fd; border-radius: 8px; text-align: center; margin-bottom: 10px;">
-            🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε «Ενεργοποίηση» στο παράθυρο που εμφανίζεται για να λαμβάνετε Push Notifications.
-        </div>
-        """
-        components.html(onesignal_js, height=80, width=None)
 
+            async function subscribeUser() {{
+              window.OneSignalDeferred.push(async function(OneSignal) {{
+                try {{
+                  // Αίτημα άδειας στον browser
+                  await OneSignal.Notifications.requestPermission();
+                }} catch(e) {{
+                  console.log(e);
+                }}
+              }});
+            }}
+          </script>
+          <style>
+            .push-card {{
+              background-color: #e3f2fd;
+              border: 1px solid #90caf9;
+              border-radius: 10px;
+              padding: 12px 16px;
+              text-align: center;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              flex-wrap: wrap;
+              gap: 10px;
+            }}
+            .push-btn {{
+              background-color: #1976d2;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              font-size: 14px;
+              font-weight: bold;
+              border-radius: 6px;
+              cursor: pointer;
+              transition: background-color 0.2s;
+            }}
+            .push-btn:hover {{
+              background-color: #1565c0;
+            }}
+          </style>
+        </head>
+        <body style="margin:0; padding:0; background:transparent;">
+          <div class="push-card">
+            <span>🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε το κουμπί για να ενεργοποιήσετε τις ειδοποιήσεις στο κινητό σας.</span>
+            <button class="push-btn" onclick="subscribeUser()">🔔 Ενεργοποίηση</button>
+          </div>
+        </body>
+        </html>
+        """
+        components.html(onesignal_js, height=70)
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
