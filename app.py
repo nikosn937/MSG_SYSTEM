@@ -35,21 +35,37 @@ def get_db_connection():
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
 
-# --- 3. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ SIGNAL ---
-def send_signal_message(recipient, message_text):
-    api_url = st.secrets.get("SIGNAL_API_URL", "http://localhost:8080")
-    sender = st.secrets.get("SIGNAL_SENDER", "")
+# --- 3. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL ---
+def send_onesignal_notification(title, message_text):
+    app_id = st.secrets.get("ONESIGNAL_APP_ID")
+    rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
-    endpoint = f"{api_url}/v2/send"
-    payload = {
-        "message": message_text,
-        "number": sender,
-        "recipients": [recipient]
+    if not app_id or not rest_key:
+        st.warning("⚠️ Λείπουν τα διαπιστευτήρια του OneSignal στα Secrets.")
+        return False
+
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Authorization": f"Basic {rest_key}"
     }
+
+    payload = {
+        "app_id": app_id,
+        "included_segments": ["Subscribed Users"],  # Στέλνει σε όλους τους συνδεδεμένους χρήστες
+        "headings": {"el": title, "en": title},
+        "contents": {"el": message_text, "en": message_text}
+    }
+
     try:
-        response = requests.post(endpoint, json=payload, timeout=5)
-        return response.status_code in [200, 201]
-    except Exception:
+        response = requests.post(
+            "https://onesignal.com/api/v1/notifications",
+            headers=headers,
+            json=payload,
+            timeout=5
+        )
+        return response.status_code == 200
+    except Exception as e:
+        st.error(f"Σφάλμα αποστολής Push: {e}")
         return False
 
 # --- 4. SESSION STATE ---
@@ -108,15 +124,12 @@ if st.session_state["user_role"] is None:
             submit_parent = st.form_submit_button("Σύνδεση ως Γονέας")
 
             if submit_parent:
-                # Καθαρισμός εισόδου χρήστη
                 clean_phone = phone.strip().replace("+357", "").replace(" ", "").replace("-", "")
                 clean_pass = password.strip().replace("+357", "").replace(" ", "").replace("-", "")
 
                 conn = get_db_connection()
                 if conn:
                     cursor = conn.cursor()
-                    
-                    # Αναζήτηση με καθαρισμό χαρακτήρων και υποστήριξη αν το IsActive είναι NULL
                     query = """
                         SELECT ParentID, FirstName, LastName, Phone 
                         FROM Parents 
@@ -139,7 +152,8 @@ if st.session_state["user_role"] is None:
                         st.rerun()
                     else:
                         st.error("❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία.")
-# --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
+
+# --- 6. ΠΟΡΤΑΛ ΑΠΟΣТОΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     st.sidebar.title("⚙️ Διαχείριση Αποστολών")
     st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
@@ -152,6 +166,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     else:
         admin_tab1 = st.container()
 
+    # TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ
     with admin_tab1:
         st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
@@ -168,7 +183,8 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             title = st.text_input("Θέμα / Τίτλος Μηνύματος")
             selected_class_label = st.selectbox("Παραλήπτες (Τμήμα)", list(classes_dict.keys()))
             content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
-            send_signal = st.checkbox("📲 Αποστολή και ως Signal SMS στους παραλήπτες", value=True)
+            
+            send_push = st.checkbox("🔔 Αποστολή και ως Push Notification (OneSignal)", value=True)
             submit = st.form_submit_button("🚀 Αποστολή Μηνύματος")
 
             if submit:
@@ -187,32 +203,14 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                         """
                         cursor.execute(insert_query, (title, content, target_audience, class_id, st.session_state['user_info']['name']))
                         conn.commit()
+                        conn.close()
                         st.success("✅ Το μήνυμα καταχωρήθηκε στη βάση!")
 
-                        if send_signal:
-                            if target_audience == "ALL":
-                                phone_query = "SELECT DISTINCT Phone FROM Parents WHERE IsActive = 1 AND Phone IS NOT NULL"
-                                cursor.execute(phone_query)
+                        if send_push:
+                            if send_onesignal_notification(title, content):
+                                st.info("🔔 Η ειδοποίηση Push απεστάλη επιτυχώς μέσω OneSignal!")
                             else:
-                                phone_query = """
-                                    SELECT DISTINCT P.Phone 
-                                    FROM Parents P
-                                    JOIN StudentParents SP ON P.ParentID = SP.ParentID
-                                    JOIN Students S ON SP.StudentID = S.StudentID
-                                    WHERE S.ClassID = ? AND P.IsActive = 1 AND P.Phone IS NOT NULL
-                                """
-                                cursor.execute(phone_query, (class_id,))
-                            
-                            phones = [row[0] for row in cursor.fetchall()]
-                            conn.close()
-
-                            sent_count = 0
-                            signal_text = f"📩 *{title}*\n\n{content}"
-                            for phone_num in phones:
-                                if send_signal_message(phone_num, signal_text):
-                                    sent_count += 1
-                            
-                            st.info(f"📲 Το μήνυμα στάλθηκε επιτυχώς μέσω Signal σε {sent_count} παραλήπτες.")
+                                st.error("❌ Αποτυχία αποστολής Push Notification.")
 
         st.markdown("---")
         st.subheader("📜 Ιστορικό Απεσταλμένων Μηνυμάτων")
@@ -228,6 +226,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             conn.close()
             st.dataframe(df_history, use_container_width=True)
 
+    # TAB 2: ΕΙΣΑΓΩΓΗ EXCEL (ΜΟΝΟ ΓΙΑ ADMIN)
     if st.session_state["user_role"] == "Admin":
         with admin_tab2:
             st.header("📊 Μαζική Εισαγωγή Μαθητών & Γονέων από Excel")
@@ -251,6 +250,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 student_fn = str(row['StudentFirstName']).strip()
                                 student_ln = str(row['StudentLastName']).strip()
 
+                                # 1. Τμήμα
                                 cursor.execute("SELECT ClassID FROM Classes WHERE ClassName = ?", (class_name,))
                                 class_row = cursor.fetchone()
                                 if class_row:
@@ -260,6 +260,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                     cursor.execute("SELECT @@IDENTITY")
                                     class_id = cursor.fetchone()[0]
 
+                                # 2. Μαθητής
                                 cursor.execute(
                                     "INSERT INTO Students (FirstName, LastName, ClassID) VALUES (?, ?, ?)",
                                     (student_fn, student_ln, class_id)
@@ -268,7 +269,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 student_id = cursor.fetchone()[0]
                                 imported_students += 1
 
-                                # Parent 1
+                                # 3. Γονέας 1
                                 p1_fn = str(row.get('Parent1_FirstName', '')).strip()
                                 p1_ln = str(row.get('Parent1_LastName', '')).strip()
                                 raw_p1 = row.get('Parent1_Phone', '')
@@ -293,7 +294,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                         (student_id, p1_id, student_id, p1_id)
                                     )
 
-                                # Parent 2
+                                # 4. Γονέας 2
                                 p2_fn = str(row.get('Parent2_FirstName', '')).strip()
                                 p2_ln = str(row.get('Parent2_LastName', '')).strip()
                                 raw_p2 = row.get('Parent2_Phone', '')
