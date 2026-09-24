@@ -44,27 +44,6 @@ def inject_onesignal_script():
         <!DOCTYPE html>
         <html>
         <head>
-          <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-          <script>
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(async function(OneSignal) {{
-              await OneSignal.init({{
-                appId: "{app_id}",
-                allowLocalhostAsSecureOrigin: true,
-              }});
-            }});
-
-            async function subscribeUser() {{
-              window.OneSignalDeferred.push(async function(OneSignal) {{
-                try {{
-                  await OneSignal.Notifications.requestPermission();
-                }} catch(e) {{
-                  console.error(e);
-                  alert("Παρακαλούμε επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του περιηγητή.");
-                }}
-              }});
-            }}
-          </script>
           <style>
             * {{ box-sizing: border-box; }}
             body {{ 
@@ -103,11 +82,66 @@ def inject_onesignal_script():
               background-color: #1e40af;
             }}
           </style>
+          <script>
+            function openPrompt() {{
+              // Ανοίγουμε νέο παράθυρο για να ξεπεράσουμε το iframe restriction του Streamlit
+              const w = 450;
+              const h = 350;
+              const left = (screen.width - w) / 2;
+              const top = (screen.height - h) / 2;
+              
+              const popup = window.open("", "OneSignalPrompt", `width=${{w}},height=${{h}},top=${{top}},left=${{left}}`);
+              
+              if (popup) {{
+                popup.document.write(`
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <title>Ενεργοποίηση Ειδοποιήσεων</title>
+                    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+                    <script>
+                      window.OneSignalDeferred = window.OneSignalDeferred || [];
+                      OneSignalDeferred.push(async function(OneSignal) {{
+                        await OneSignal.init({{
+                          appId: "{app_id}",
+                        }});
+                      }});
+
+                      async function requestPermission() {{
+                        window.OneSignalDeferred.push(async function(OneSignal) {{
+                          try {{
+                            await OneSignal.Notifications.requestPermission();
+                            alert("Οι ειδοποιήσεις ενεργοποιήθηκαν επιτυχώς!");
+                            window.close();
+                          }} catch (err) {{
+                            alert("Παρακαλούμε επιτρέψτε τις ειδοποιήσεις στις ρυθμίσεις του browser σας.");
+                          }}
+                        }});
+                      }}
+                    </script>
+                    <style>
+                      body {{ font-family: system-ui, sans-serif; text-align: center; padding: 40px 20px; background: #f8fafc; color: #0f172a; }}
+                      .btn-popup {{ background: #2563eb; color: white; border: none; padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; cursor: pointer; margin-top: 20px; }}
+                      .btn-popup:hover {{ background: #1d4ed8; }}
+                    </style>
+                  </head>
+                  <body>
+                    <h3>🔔 Ενεργοποίηση Ειδοποιήσεων</h3>
+                    <p>Πατήστε το κουμπί παρακάτω για να επιτρέψετε τις ειδοποιήσεις από το σχολείο.</p>
+                    <button class="btn-popup" onclick="requestPermission()">Επιτροπεί Ειδοποιήσεων</button>
+                  </body>
+                  </html>
+                `);
+              }} else {{
+                alert("Παρακαλώ επιτρέψτε τα αναδυόμενα παράθυρα (Pop-ups) στον browser σας.");
+              }}
+            }}
+          </script>
         </head>
         <body>
           <div class="card">
             <span class="card-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Ενεργοποιήστε τις ειδοποιήσεις για να λαμβάνετε ανακοινώσεις.</span>
-            <button class="btn" onclick="subscribeUser()">🔔 Ενεργοποίηση</button>
+            <button class="btn" onclick="openPrompt()">🔔 Ενεργοποίηση</button>
           </div>
         </body>
         </html>
