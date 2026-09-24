@@ -40,113 +40,15 @@ def get_db_connection():
 def inject_onesignal_script():
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "")
     if app_id:
-        onesignal_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            * {{ box-sizing: border-box; }}
-            body {{ 
-              margin: 0; 
-              padding: 0; 
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-              background: transparent; 
-            }}
-            .card {{
-              background-color: #f0f7ff;
-              border: 1px solid #b3d8ff;
-              border-radius: 8px;
-              padding: 10px 15px;
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              gap: 10px;
-            }}
-            .card-text {{
-              color: #1e3a8a;
-              font-size: 14px;
-              font-weight: 500;
-            }}
-            .btn {{
-              background-color: #1d4ed8;
-              color: #ffffff;
-              border: none;
-              padding: 8px 16px;
-              font-size: 13px;
-              font-weight: 600;
-              border-radius: 6px;
-              cursor: pointer;
-              white-space: nowrap;
-            }}
-            .btn:hover {{
-              background-color: #1e40af;
-            }}
-          </style>
-          <script>
-            function openPrompt() {{
-              // Ανοίγουμε νέο παράθυρο για να ξεπεράσουμε το iframe restriction του Streamlit
-              const w = 450;
-              const h = 350;
-              const left = (screen.width - w) / 2;
-              const top = (screen.height - h) / 2;
-              
-              const popup = window.open("", "OneSignalPrompt", `width=${{w}},height=${{h}},top=${{top}},left=${{left}}`);
-              
-              if (popup) {{
-                popup.document.write(`
-                  <!DOCTYPE html>
-                  <html>
-                  <head>
-                    <title>Ενεργοποίηση Ειδοποιήσεων</title>
-                    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-                    <script>
-                      window.OneSignalDeferred = window.OneSignalDeferred || [];
-                      OneSignalDeferred.push(async function(OneSignal) {{
-                        await OneSignal.init({{
-                          appId: "{app_id}",
-                        }});
-                      }});
-
-                      async function requestPermission() {{
-                        window.OneSignalDeferred.push(async function(OneSignal) {{
-                          try {{
-                            await OneSignal.Notifications.requestPermission();
-                            alert("Οι ειδοποιήσεις ενεργοποιήθηκαν επιτυχώς!");
-                            window.close();
-                          }} catch (err) {{
-                            alert("Παρακαλούμε επιτρέψτε τις ειδοποιήσεις στις ρυθμίσεις του browser σας.");
-                          }}
-                        }});
-                      }}
-                    </script>
-                    <style>
-                      body {{ font-family: system-ui, sans-serif; text-align: center; padding: 40px 20px; background: #f8fafc; color: #0f172a; }}
-                      .btn-popup {{ background: #2563eb; color: white; border: none; padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; cursor: pointer; margin-top: 20px; }}
-                      .btn-popup:hover {{ background: #1d4ed8; }}
-                    </style>
-                  </head>
-                  <body>
-                    <h3>🔔 Ενεργοποίηση Ειδοποιήσεων</h3>
-                    <p>Πατήστε το κουμπί παρακάτω για να επιτρέψετε τις ειδοποιήσεις από το σχολείο.</p>
-                    <button class="btn-popup" onclick="requestPermission()">Επιτροπεί Ειδοποιήσεων</button>
-                  </body>
-                  </html>
-                `);
-              }} else {{
-                alert("Παρακαλώ επιτρέψτε τα αναδυόμενα παράθυρα (Pop-ups) στον browser σας.");
-              }}
-            }}
-          </script>
-        </head>
-        <body>
-          <div class="card">
-            <span class="card-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Ενεργοποιήστε τις ειδοποιήσεις για να λαμβάνετε ανακοινώσεις.</span>
-            <button class="btn" onclick="openPrompt()">🔔 Ενεργοποίηση</button>
-          </div>
-        </body>
-        </html>
-        """
-        components.html(onesignal_html, height=65)
+        # Χρήση Native Streamlit UI αντί για components.html iframe
+        with st.container():
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.info("🔔 **Ειδοποιήσεις Σχολείου:** Ενεργοποιήστε τις ειδοποιήσεις για να λαμβάνετε άμεσα τις ανακοινώσεις.")
+            with col2:
+                # Δημιουργία συνδέσμου που ανοίγει σε νέα καρτέλα εκτός iframe
+                target_url = f"https://onesignal.com/subscribe?app_id={app_id}"
+                st.link_button("🔔 Ενεργοποίηση", target_url, use_container_width=True)
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
