@@ -35,9 +35,8 @@ def get_db_connection():
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
 
-# --- 3. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ SIGNAL ---
+# --- 3. ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΟΣ SIGNAL ---
 def send_signal_message(recipient, message_text):
-    """Αποστολή μηνύματος κειμένου μέσω του local Signal REST API service"""
     api_url = st.secrets.get("SIGNAL_API_URL", "http://localhost:8080")
     sender = st.secrets.get("SIGNAL_SENDER", "")
 
@@ -71,7 +70,6 @@ if st.session_state["user_role"] is None:
 
     tab_admin, tab_parent = st.tabs(["👨‍🏫 Αποστολέας / Εκπαιδευτικός", "👨‍👩‍👧 Γονέας / Κηδεμόνας"])
 
-    # --- LOGIN ΑΠΟΣΤΟΛΕΑ / ADMIN / TEACHER (Από τον πίνακα Users) ---
     with tab_admin:
         with st.form("admin_login_form"):
             username = st.text_input("Όνομα Χρήστη (Username)")
@@ -103,7 +101,6 @@ if st.session_state["user_role"] is None:
                     else:
                         st.error("Λανθασμένα στοιχεία σύνδεσης.")
 
-    # --- LOGIN ΓΟΝΕΑ (Από τον πίνακα Parents) ---
     with tab_parent:
         with st.form("parent_login_form"):
             phone = st.text_input("Αριθμός Τηλεφώνου", placeholder="+35799XXXXXX")
@@ -143,88 +140,196 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     if st.sidebar.button("🚪 Αποσύνδεση"):
         logout()
 
-    st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
+    # Ο Admin βλέπει 2 tabs, ο Καθηγητής μόνο την Αποστολή
+    if st.session_state["user_role"] == "Admin":
+        admin_tab1, admin_tab2 = st.tabs(["📤 Αποστολή Μηνύματος", "📁 Εισαγωγή Δεδομένων Excel (Admin Only)"])
+    else:
+        admin_tab1 = st.container()
 
-    # Ανάκτηση τμημάτων από τη βάση
-    conn = get_db_connection()
-    classes_dict = {"Όλα τα τμήματα (ALL)": None}
-    if conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT ClassID, ClassName FROM Classes ORDER BY ClassName")
-        for cid, cname in cursor.fetchall():
-            classes_dict[cname] = cid
-        conn.close()
+    # --- TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ ---
+    with admin_tab1:
+        st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
-    with st.form("send_announcement_form"):
-        title = st.text_input("Θέμα / Τίτλος Μηνύματος")
-        selected_class_label = st.selectbox("Παραλήπτες (Τμήμα)", list(classes_dict.keys()))
-        content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
-        
-        send_signal = st.checkbox("📲 Αποστολή και ως Signal SMS στους παραλήπτες", value=True)
-        
-        submit = st.form_submit_button("🚀 Αποστολή Μηνύματος")
+        conn = get_db_connection()
+        classes_dict = {"Όλα τα τμήματα (ALL)": None}
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT ClassID, ClassName FROM Classes ORDER BY ClassName")
+            for cid, cname in cursor.fetchall():
+                classes_dict[cname] = cid
+            conn.close()
 
-        if submit:
-            if not title or not content:
-                st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
-            else:
-                target_audience = "ALL" if selected_class_label == "Όλα τα τμήματα (ALL)" else "CLASS"
-                class_id = classes_dict[selected_class_label]
+        with st.form("send_announcement_form"):
+            title = st.text_input("Θέμα / Τίτλος Μηνύματος")
+            selected_class_label = st.selectbox("Παραλήπτες (Τμήμα)", list(classes_dict.keys()))
+            content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
+            
+            send_signal = st.checkbox("📲 Αποστολή και ως Signal SMS στους παραλήπτες", value=True)
+            
+            submit = st.form_submit_button("🚀 Αποστολή Μηνύματος")
 
-                conn = get_db_connection()
-                if conn:
-                    cursor = conn.cursor()
-                    
-                    # 1. Καταχώρηση στον πίνακα Announcements
-                    insert_query = """
-                        INSERT INTO Announcements (Title, Content, TargetAudience, ClassID, SentBy, CreatedAt)
-                        VALUES (?, ?, ?, ?, ?, GETDATE())
-                    """
-                    cursor.execute(insert_query, (title, content, target_audience, class_id, st.session_state['user_info']['name']))
-                    conn.commit()
-                    st.success("✅ Το μήνυμα καταχωρήθηκε στη βάση!")
+            if submit:
+                if not title or not content:
+                    st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
+                else:
+                    target_audience = "ALL" if selected_class_label == "Όλα τα τμήματα (ALL)" else "CLASS"
+                    class_id = classes_dict[selected_class_label]
 
-                    # 2. Αποστολή Signal SMS στους γονείς του στοχευμένου τμήματος/όλων
-                    if send_signal:
-                        if target_audience == "ALL":
-                            phone_query = "SELECT DISTINCT Phone FROM Parents WHERE IsActive = 1 AND Phone IS NOT NULL"
-                            cursor.execute(phone_query)
-                        else:
-                            phone_query = """
-                                SELECT DISTINCT P.Phone 
-                                FROM Parents P
-                                JOIN StudentParents SP ON P.ParentID = SP.ParentID
-                                JOIN Students S ON SP.StudentID = S.StudentID
-                                WHERE S.ClassID = ? AND P.IsActive = 1 AND P.Phone IS NOT NULL
-                            """
-                            cursor.execute(phone_query, (class_id,))
-                        
-                        phones = [row[0] for row in cursor.fetchall()]
-                        conn.close()
+                    conn = get_db_connection()
+                    if conn:
+                        cursor = conn.cursor()
+                        insert_query = """
+                            INSERT INTO Announcements (Title, Content, TargetAudience, ClassID, SentBy, CreatedAt)
+                            VALUES (?, ?, ?, ?, ?, GETDATE())
+                        """
+                        cursor.execute(insert_query, (title, content, target_audience, class_id, st.session_state['user_info']['name']))
+                        conn.commit()
+                        st.success("✅ Το μήνυμα καταχωρήθηκε στη βάση!")
 
-                        sent_count = 0
-                        signal_text = f"📩 *{title}*\n\n{content}"
-                        for phone_num in phones:
-                            if send_signal_message(phone_num, signal_text):
-                                sent_count += 1
-                        
-                        st.info(f"📲 Το μήνυμα στάλθηκε επιτυχώς μέσω Signal σε {sent_count} παραλήπτες.")
+                        if send_signal:
+                            if target_audience == "ALL":
+                                phone_query = "SELECT DISTINCT Phone FROM Parents WHERE IsActive = 1 AND Phone IS NOT NULL"
+                                cursor.execute(phone_query)
+                            else:
+                                phone_query = """
+                                    SELECT DISTINCT P.Phone 
+                                    FROM Parents P
+                                    JOIN StudentParents SP ON P.ParentID = SP.ParentID
+                                    JOIN Students S ON SP.StudentID = S.StudentID
+                                    WHERE S.ClassID = ? AND P.IsActive = 1 AND P.Phone IS NOT NULL
+                                """
+                                cursor.execute(phone_query, (class_id,))
+                            
+                            phones = [row[0] for row in cursor.fetchall()]
+                            conn.close()
 
-    st.markdown("---")
-    st.subheader("📜 Ιστορικό Απεσταλμένων Μηνυμάτων")
-    conn = get_db_connection()
-    if conn:
-        query_history = """
-            SELECT A.AnnouncementID, A.Title, A.TargetAudience, C.ClassName, A.SentBy, A.CreatedAt
-            FROM Announcements A
-            LEFT JOIN Classes C ON A.ClassID = C.ClassID
-            ORDER BY A.CreatedAt DESC
-        """
-        df_history = pd.read_sql(query_history, conn)
-        conn.close()
-        st.dataframe(df_history, use_container_width=True)
+                            sent_count = 0
+                            signal_text = f"📩 *{title}*\n\n{content}"
+                            for phone_num in phones:
+                                if send_signal_message(phone_num, signal_text):
+                                    sent_count += 1
+                            
+                            st.info(f"📲 Το μήνυμα στάλθηκε επιτυχώς μέσω Signal σε {sent_count} παραλήπτες.")
 
-# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ (RECEIVE & READ RECEIPTS) ---
+        st.markdown("---")
+        st.subheader("📜 Ιστορικό Απεσταλμένων Μηνυμάτων")
+        conn = get_db_connection()
+        if conn:
+            query_history = """
+                SELECT A.AnnouncementID, A.Title, A.TargetAudience, C.ClassName, A.SentBy, A.CreatedAt
+                FROM Announcements A
+                LEFT JOIN Classes C ON A.ClassID = C.ClassID
+                ORDER BY A.CreatedAt DESC
+            """
+            df_history = pd.read_sql(query_history, conn)
+            conn.close()
+            st.dataframe(df_history, use_container_width=True)
+
+    # --- TAB 2: ΕΙΣΑΓΩΓΗ EXCEL (ΜΟΝΟ ΓΙΑ ADMIN) ---
+    if st.session_state["user_role"] == "Admin":
+        with admin_tab2:
+            st.header("📊 Μαζική Εισαγωγή Μαθητών & Γονέων από Excel")
+            st.info("Επιλέξτε το αρχείο `.xlsx` με τις στήλες: `ClassName`, `StudentFirstName`, `StudentLastName`, `Parent1_FirstName`, `Parent1_LastName`, `Parent1_Phone`, κλπ.")
+
+            uploaded_file = st.file_uploader("Μεταφόρτωση Αρχείου Excel", type=["xlsx", "xls"])
+
+            if uploaded_file is not None:
+                df = pd.read_excel(uploaded_file)
+                st.subheader("Προεπισκόπηση Δεδομένων")
+                st.dataframe(df.head(), use_container_width=True)
+
+                if st.button("📥 Εισαγωγή στη Βάση Δεδομένων"):
+                    conn = get_db_connection()
+                    if conn:
+                        cursor = conn.cursor()
+                        imported_students = 0
+                        imported_parents = 0
+
+                        try:
+                            for idx, row in df.iterrows():
+                                class_name = str(row['ClassName']).strip()
+                                student_fn = str(row['StudentFirstName']).strip()
+                                student_ln = str(row['StudentLastName']).strip()
+
+                                # 1. Έλεγχος/Εισαγωγή Τμήματος (Classes)
+                                cursor.execute("SELECT ClassID FROM Classes WHERE ClassName = ?", (class_name,))
+                                class_row = cursor.fetchone()
+                                if class_row:
+                                    class_id = class_row[0]
+                                else:
+                                    cursor.execute("INSERT INTO Classes (ClassName, AcademicYear) VALUES (?, '2025-2026')", (class_name,))
+                                    cursor.execute("SELECT @@IDENTITY")
+                                    class_id = cursor.fetchone()[0]
+
+                                # 2. Εισαγωγή Μαθητή (Students)
+                                cursor.execute(
+                                    "INSERT INTO Students (FirstName, LastName, ClassID) VALUES (?, ?, ?)",
+                                    (student_fn, student_ln, class_id)
+                                )
+                                cursor.execute("SELECT @@IDENTITY")
+                                student_id = cursor.fetchone()[0]
+                                imported_students += 1
+
+                                # 3. Επεξεργασία Γονέα 1
+                                p1_fn = str(row.get('Parent1_FirstName', '')).strip()
+                                p1_ln = str(row.get('Parent1_LastName', '')).strip()
+                                p1_phone = str(row.get('Parent1_Phone', '')).split('.')[0].strip()
+
+                                if p1_phone and p1_phone.lower() != 'nan':
+                                    cursor.execute("SELECT ParentID FROM Parents WHERE Phone = ?", (p1_phone,))
+                                    p1_row = cursor.fetchone()
+                                    if p1_row:
+                                        p1_id = p1_row[0]
+                                    else:
+                                        cursor.execute(
+                                            "INSERT INTO Parents (FirstName, LastName, Phone, PasswordHash) VALUES (?, ?, ?, ?)",
+                                            (p1_fn, p1_ln, p1_phone, p1_phone) # Default password το τηλέφωνο
+                                        )
+                                        cursor.execute("SELECT @@IDENTITY")
+                                        p1_id = cursor.fetchone()[0]
+                                        imported_parents += 1
+
+                                    # Σύνδεση Μαθητή - Γονέα 1
+                                    cursor.execute(
+                                        "IF NOT EXISTS (SELECT 1 FROM StudentParents WHERE StudentID=? AND ParentID=?) INSERT INTO StudentParents (StudentID, ParentID) VALUES (?, ?)",
+                                        (student_id, p1_id, student_id, p1_id)
+                                    )
+
+                                # 4. Επεξεργασία Γονέα 2 (εφόσον υπάρχει)
+                                p2_fn = str(row.get('Parent2_FirstName', '')).strip()
+                                p2_ln = str(row.get('Parent2_LastName', '')).strip()
+                                p2_phone_raw = row.get('Parent2_Phone', '')
+                                p2_phone = str(p2_phone_raw).split('.')[0].strip() if pd.notnull(p2_phone_raw) else ''
+
+                                if p2_phone and p2_phone.lower() != 'nan':
+                                    cursor.execute("SELECT ParentID FROM Parents WHERE Phone = ?", (p2_phone,))
+                                    p2_row = cursor.fetchone()
+                                    if p2_row:
+                                        p2_id = p2_row[0]
+                                    else:
+                                        cursor.execute(
+                                            "INSERT INTO Parents (FirstName, LastName, Phone, PasswordHash) VALUES (?, ?, ?, ?)",
+                                            (p2_fn, p2_ln, p2_phone, p2_phone)
+                                        )
+                                        cursor.execute("SELECT @@IDENTITY")
+                                        p2_id = cursor.fetchone()[0]
+                                        imported_parents += 1
+
+                                    # Σύνδεση Μαθητή - Γονέα 2
+                                    cursor.execute(
+                                        "IF NOT EXISTS (SELECT 1 FROM StudentParents WHERE StudentID=? AND ParentID=?) INSERT INTO StudentParents (StudentID, ParentID) VALUES (?, ?)",
+                                        (student_id, p2_id, student_id, p2_id)
+                                    )
+
+                            conn.commit()
+                            st.success(f"🎉 Επιτυχής εισαγωγή! Προστέθηκαν {imported_students} μαθητές και {imported_parents} νέοι γονείς.")
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"❌ Σφάλμα κατά την εισαγωγή: {e}")
+                        finally:
+                            conn.close()
+
+# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
     parent_id = st.session_state["user_info"]["id"]
     parent_name = st.session_state["user_info"]["name"]
