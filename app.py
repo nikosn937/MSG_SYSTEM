@@ -35,7 +35,7 @@ def get_db_connection():
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
 
-# --- 3. ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΟΣ SIGNAL ---
+# --- 3. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ SIGNAL ---
 def send_signal_message(recipient, message_text):
     api_url = st.secrets.get("SIGNAL_API_URL", "http://localhost:8080")
     sender = st.secrets.get("SIGNAL_SENDER", "")
@@ -90,7 +90,7 @@ if st.session_state["user_role"] is None:
                     conn.close()
 
                     if user:
-                        st.session_state["user_role"] = user[2]  # 'Admin' ή 'Teacher'
+                        st.session_state["user_role"] = user[2]
                         st.session_state["user_info"] = {
                             "id": user[0],
                             "name": user[1],
@@ -103,20 +103,26 @@ if st.session_state["user_role"] is None:
 
     with tab_parent:
         with st.form("parent_login_form"):
-            phone = st.text_input("Αριθμός Τηλεφώνου", placeholder="+35799XXXXXX")
+            phone = st.text_input("Αριθμός Τηλεφώνου", placeholder="99XXXXXX")
             password = st.text_input("Κωδικός Πρόσβασης", type="password")
             submit_parent = st.form_submit_button("Σύνδεση ως Γονέας")
 
             if submit_parent:
+                # Καθαρισμός τηλεφώνου από +357, κενά και παύλες
+                clean_phone = phone.strip().replace("+357", "").replace(" ", "").replace("-", "")
+                clean_pass = password.strip().replace("+357", "").replace(" ", "").replace("-", "")
+
                 conn = get_db_connection()
                 if conn:
                     cursor = conn.cursor()
                     query = """
-                        SELECT ParentID, FirstName, LastName 
+                        SELECT ParentID, FirstName, LastName, Phone, PasswordHash 
                         FROM Parents 
-                        WHERE Phone = ? AND PasswordHash = ? AND IsActive = 1
+                        WHERE REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', '') = ? 
+                          AND REPLACE(REPLACE(REPLACE(PasswordHash, '+357', ''), ' ', ''), '-', '') = ?
+                          AND IsActive = 1
                     """
-                    cursor.execute(query, (phone, password))
+                    cursor.execute(query, (clean_phone, clean_pass))
                     parent = cursor.fetchone()
                     conn.close()
 
@@ -125,7 +131,7 @@ if st.session_state["user_role"] is None:
                         st.session_state["user_info"] = {
                             "id": parent[0],
                             "name": f"{parent[1]} {parent[2]}",
-                            "phone": phone
+                            "phone": parent[3]
                         }
                         st.success(f"Καλώς ήρθατε, {parent[1]}!")
                         st.rerun()
@@ -140,13 +146,11 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     if st.sidebar.button("🚪 Αποσύνδεση"):
         logout()
 
-    # Ο Admin βλέπει 2 tabs, ο Καθηγητής μόνο την Αποστολή
     if st.session_state["user_role"] == "Admin":
         admin_tab1, admin_tab2 = st.tabs(["📤 Αποστολή Μηνύματος", "📁 Εισαγωγή Δεδομένων Excel (Admin Only)"])
     else:
         admin_tab1 = st.container()
 
-    # --- TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ ---
     with admin_tab1:
         st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
@@ -163,9 +167,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             title = st.text_input("Θέμα / Τίτλος Μηνύματος")
             selected_class_label = st.selectbox("Παραλήπτες (Τμήμα)", list(classes_dict.keys()))
             content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
-            
             send_signal = st.checkbox("📲 Αποστολή και ως Signal SMS στους παραλήπτες", value=True)
-            
             submit = st.form_submit_button("🚀 Αποστολή Μηνύματος")
 
             if submit:
@@ -225,12 +227,9 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             conn.close()
             st.dataframe(df_history, use_container_width=True)
 
-    # --- TAB 2: ΕΙΣΑΓΩΓΗ EXCEL (ΜΟΝΟ ΓΙΑ ADMIN) ---
     if st.session_state["user_role"] == "Admin":
         with admin_tab2:
             st.header("📊 Μαζική Εισαγωγή Μαθητών & Γονέων από Excel")
-            st.info("Επιλέξτε το αρχείο `.xlsx` με τις στήλες: `ClassName`, `StudentFirstName`, `StudentLastName`, `Parent1_FirstName`, `Parent1_LastName`, `Parent1_Phone`, κλπ.")
-
             uploaded_file = st.file_uploader("Μεταφόρτωση Αρχείου Excel", type=["xlsx", "xls"])
 
             if uploaded_file is not None:
@@ -251,7 +250,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 student_fn = str(row['StudentFirstName']).strip()
                                 student_ln = str(row['StudentLastName']).strip()
 
-                                # 1. Έλεγχος/Εισαγωγή Τμήματος (Classes)
                                 cursor.execute("SELECT ClassID FROM Classes WHERE ClassName = ?", (class_name,))
                                 class_row = cursor.fetchone()
                                 if class_row:
@@ -261,7 +259,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                     cursor.execute("SELECT @@IDENTITY")
                                     class_id = cursor.fetchone()[0]
 
-                                # 2. Εισαγωγή Μαθητή (Students)
                                 cursor.execute(
                                     "INSERT INTO Students (FirstName, LastName, ClassID) VALUES (?, ?, ?)",
                                     (student_fn, student_ln, class_id)
@@ -270,10 +267,11 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 student_id = cursor.fetchone()[0]
                                 imported_students += 1
 
-                                # 3. Επεξεργασία Γονέα 1
+                                # Parent 1
                                 p1_fn = str(row.get('Parent1_FirstName', '')).strip()
                                 p1_ln = str(row.get('Parent1_LastName', '')).strip()
-                                p1_phone = str(row.get('Parent1_Phone', '')).split('.')[0].strip()
+                                raw_p1 = row.get('Parent1_Phone', '')
+                                p1_phone = str(int(raw_p1)).strip() if pd.notnull(raw_p1) and str(raw_p1).replace('.0','').isdigit() else str(raw_p1).strip()
 
                                 if p1_phone and p1_phone.lower() != 'nan':
                                     cursor.execute("SELECT ParentID FROM Parents WHERE Phone = ?", (p1_phone,))
@@ -283,23 +281,22 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                     else:
                                         cursor.execute(
                                             "INSERT INTO Parents (FirstName, LastName, Phone, PasswordHash) VALUES (?, ?, ?, ?)",
-                                            (p1_fn, p1_ln, p1_phone, p1_phone) # Default password το τηλέφωνο
+                                            (p1_fn, p1_ln, p1_phone, p1_phone)
                                         )
                                         cursor.execute("SELECT @@IDENTITY")
                                         p1_id = cursor.fetchone()[0]
                                         imported_parents += 1
 
-                                    # Σύνδεση Μαθητή - Γονέα 1
                                     cursor.execute(
                                         "IF NOT EXISTS (SELECT 1 FROM StudentParents WHERE StudentID=? AND ParentID=?) INSERT INTO StudentParents (StudentID, ParentID) VALUES (?, ?)",
                                         (student_id, p1_id, student_id, p1_id)
                                     )
 
-                                # 4. Επεξεργασία Γονέα 2 (εφόσον υπάρχει)
+                                # Parent 2
                                 p2_fn = str(row.get('Parent2_FirstName', '')).strip()
                                 p2_ln = str(row.get('Parent2_LastName', '')).strip()
-                                p2_phone_raw = row.get('Parent2_Phone', '')
-                                p2_phone = str(p2_phone_raw).split('.')[0].strip() if pd.notnull(p2_phone_raw) else ''
+                                raw_p2 = row.get('Parent2_Phone', '')
+                                p2_phone = str(int(raw_p2)).strip() if pd.notnull(raw_p2) and str(raw_p2).replace('.0','').isdigit() else str(raw_p2).strip()
 
                                 if p2_phone and p2_phone.lower() != 'nan':
                                     cursor.execute("SELECT ParentID FROM Parents WHERE Phone = ?", (p2_phone,))
@@ -315,7 +312,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                         p2_id = cursor.fetchone()[0]
                                         imported_parents += 1
 
-                                    # Σύνδεση Μαθητή - Γονέα 2
                                     cursor.execute(
                                         "IF NOT EXISTS (SELECT 1 FROM StudentParents WHERE StudentID=? AND ParentID=?) INSERT INTO StudentParents (StudentID, ParentID) VALUES (?, ?)",
                                         (student_id, p2_id, student_id, p2_id)
