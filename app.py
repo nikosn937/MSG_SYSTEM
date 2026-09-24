@@ -50,22 +50,32 @@ def inject_onesignal_script():
             OneSignalDeferred.push(async function(OneSignal) {{
               await OneSignal.init({{
                 appId: "{app_id}",
-                allowLocalhostAsSecureOrigin: true
+                allowLocalhostAsSecureOrigin: true,
               }});
             }});
 
-            async function requestPush() {{
+            async function subscribeUser() {{
               window.OneSignalDeferred.push(async function(OneSignal) {{
                 try {{
-                  await OneSignal.Notifications.requestPermission();
+                  // Έλεγχος κατάστασης δικαιωμάτων
+                  const permission = OneSignal.Notifications.permission;
+                  
+                  if (permission) {{
+                    // Αν δεν έχει ζητηθεί ακόμα άδεια, ζητάμε δικαιώματα
+                    await OneSignal.Notifications.requestPermission();
+                  }} else {{
+                    // Εναλλακτικά καλούμε το Slidedown prompt του OneSignal
+                    await OneSignal.Slidedown.promptPush();
+                  }}
                 }} catch (e) {{
                   console.error("OneSignal Error:", e);
+                  alert("Δεν ήταν δυνατή η ενεργοποίηση. Βεβαιωθείτε ότι δεν έχετε μπλοκάρει τις ειδοποιήσεις από τις ρυθμίσεις του browser.");
                 }}
               }});
             }}
           </script>
           <style>
-            body {{ margin: 0; padding: 0; font-family: sans-serif; background: transparent; }}
+            body {{ margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; }}
             .box {{
               background-color: #e3f2fd;
               border: 1px solid #90caf9;
@@ -85,21 +95,20 @@ def inject_onesignal_script():
               font-weight: bold;
               border-radius: 5px;
               cursor: pointer;
+              white-space: nowrap;
             }}
             .btn:hover {{ background-color: #1565c0; }}
           </style>
         </head>
         <body>
           <div class="box">
-            <span>🔔 <b>Ενεργοποίηση Ειδοποιήσεων:</b> Πατήστε το κουμπί για να λαμβάνετε ανακοινώσεις.</span>
-            <button class="btn" onclick="requestPush()">🔔 Ενεργοποίηση</button>
+            <span>🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε το κουμπί για να ενεργοποιήσετε τις ανακοινώσεις.</span>
+            <button class="btn" onclick="subscribeUser()">🔔 Ενεργοποίηση</button>
           </div>
         </body>
         </html>
         """
-        # Διόρθωση: Χρήση της μεταβλητής onesignal_html
-        components.html(onesignal_html, height=75)
-# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+        components.html(onesignal_html, height=75)# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
