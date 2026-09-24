@@ -55,7 +55,6 @@ def inject_onesignal_script():
             }});
 
             function openSubscriptionWindow() {{
-              // Ανοίγουμε το παράθυρο εγγραφής στο κύριο window για να μην μπλοκάρεται από το iframe του Streamlit
               const width = 500;
               const height = 400;
               const left = (screen.width - width) / 2;
@@ -74,23 +73,20 @@ def inject_onesignal_script():
                       <title>Ενεργοποίηση Ειδοποιήσεων</title>
                       <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
                       <style>
-                        body {{ font-family: sans-serif; text-align: center; padding: 40px 20px; background: #f9f9f9; }}
-                        .btn {{ background: #1976d2; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; }}
+                        body {{ font-family: system-ui, sans-serif; text-align: center; padding: 30px 20px; background: #fafafa; color: #333; }}
+                        .btn {{ background: #1976d2; color: white; border: none; padding: 12px 24px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 15px; }}
                         .btn:hover {{ background: #1565c0; }}
                       </style>
                     </head>
                     <body>
                       <h3>🔔 Ενεργοποίηση Ειδοποιήσεων</h3>
                       <p>Πατήστε το παρακάτω κουμπί και στη συνέχεια επιλέξτε <b>"Επιτρέπεται" (Allow)</b> στο παράθυρο του περιηγητή.</p>
-                      <br/>
                       <button class="btn" onclick="subscribe()">Επιτρέπω τις Ειδοποιήσεις</button>
 
                       <script>
                         window.OneSignalDeferred = window.OneSignalDeferred || [];
                         OneSignalDeferred.push(async function(OneSignal) {{
-                          await OneSignal.init({{
-                            appId: "{app_id}",
-                          }});
+                          await OneSignal.init({{ appId: "{app_id}" }});
                         }});
 
                         async function subscribe() {{
@@ -100,7 +96,6 @@ def inject_onesignal_script():
                               alert("Ευχαριστούμε! Οι ειδοποιήσεις ενεργοποιήθηκαν.");
                               window.close();
                             }} catch(e) {{
-                              console.error(e);
                               alert("Παρακαλούμε επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του browser.");
                             }}
                           }});
@@ -115,40 +110,48 @@ def inject_onesignal_script():
             }}
           </script>
           <style>
-            body {{ margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; }}
+            * {{ box-sizing: border-box; }}
+            body {{ margin: 0; padding: 5px; font-family: system-ui, -apple-system, sans-serif; background: transparent; }}
             .box {{
-              background-color: #e3f2fd;
-              border: 1px solid #90caf9;
+              background-color: #f0f7ff;
+              border: 1px solid #b3d8ff;
               border-radius: 8px;
-              padding: 10px 15px;
+              padding: 12px 16px;
               display: flex;
               align-items: center;
               justify-content: space-between;
-              gap: 10px;
+              gap: 12px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }}
+            .text {{
+              color: #1e3a8a;
+              font-size: 14px;
+              line-height: 1.4;
             }}
             .btn {{
-              background-color: #1976d2;
+              background-color: #1d4ed8;
               color: white;
               border: none;
-              padding: 8px 14px;
+              padding: 8px 16px;
               font-size: 13px;
-              font-weight: bold;
-              border-radius: 5px;
+              font-weight: 600;
+              border-radius: 6px;
               cursor: pointer;
               white-space: nowrap;
             }}
-            .btn:hover {{ background-color: #1565c0; }}
+            .btn:hover {{ background-color: #1e40af; }}
           </style>
         </head>
         <body>
           <div class="box">
-            <span>🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε για ενεργοποίηση ειδοποιήσεων.</span>
+            <span class="text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε το κουμπί για να ενεργοποιήσετε τις ειδοποιήσεις.</span>
             <button class="btn" onclick="openSubscriptionWindow()">🔔 Ενεργοποίηση</button>
           </div>
         </body>
         </html>
         """
-        components.html(onesignal_html, height=75)
+        # Αυξάνουμε το ύψος σε 110px για να μην κόβεται το πλαίσιο
+        components.html(onesignal_html, height=110)
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
