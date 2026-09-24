@@ -35,6 +35,9 @@ def get_db_connection():
     except Exception as e:
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
+import streamlit as st
+import streamlit.components.v1 as components
+
 # --- 3. ONESIGNAL PROMPT SCRIPT ---
 def inject_onesignal_script():
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "2ad617fe-461f-43bf-9755-d9cf5f994634")
@@ -57,9 +60,14 @@ def inject_onesignal_script():
         async function triggerPush() {{
           window.OneSignalDeferred.push(async function(OneSignal) {{
             try {{
-              await OneSignal.Notifications.requestPermission();
+              // Αίτημα άδειας στον περιηγητή
+              const permission = await OneSignal.Notifications.requestPermission();
+              if (permission) {{
+                alert("Ευχαριστούμε! Οι ειδοποιήσεις ενεργοποιήθηκαν.");
+              }}
             }} catch(e) {{
-              alert("Επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του browser σας.");
+              console.error(e);
+              alert("Δεν ήταν δυνατή η ενεργοποίηση. Ελέγξτε τις ρυθμίσεις ειδοποιήσεων του browser.");
             }}
           }});
         }}
@@ -109,8 +117,9 @@ def inject_onesignal_script():
     </body>
     </html>
     """
-    # Δίνουμε ακριβές ύψος 55px για να εμφανίζεται η μπάρα καθαρά χωρίς κενά
-    components.html(onesignal_html, height=55)# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+    # Το κρίσιμο σημείο: allow="notifications"
+    components.html(onesignal_html, height=55, scrolling=False)
+# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
