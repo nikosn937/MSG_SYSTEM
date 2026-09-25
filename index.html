@@ -14,18 +14,23 @@
     OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "2ad617fe-461f-43bf-9755-d9cf5f994634",
-        serviceWorkerPath: "OneSignalSDKWorker.js"
+        serviceWorkerPath: "OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/MSG_SYSTEM/" },
+        path: "/MSG_SYSTEM/"
       });
 
-      // Αν υπάρχει ήδη άδεια, προσπάθησε να πάρεις το ID
+      // Αυτόματη προσπάθεια λήψης ID αν υπάρχει άδεια
       if (Notification.permission === "granted") {
-        await OneSignal.User.PushSubscription.optIn();
-        waitForSubscriptionId(OneSignal);
+        try {
+          await OneSignal.User.PushSubscription.optIn();
+          checkSubscription(OneSignal);
+        } catch (e) {
+          console.error(e);
+        }
       }
     });
 
-    // Συνάρτηση που περιμένει μέχρι να παραχθεί το ID της συσκευής
-    async function waitForSubscriptionId(OneSignal) {
+    async function checkSubscription(OneSignal) {
       let attempts = 0;
       const interval = setInterval(async () => {
         attempts++;
@@ -33,19 +38,16 @@
         
         if (subId) {
           clearInterval(interval);
-          showSuccess(subId);
-        } else if (attempts > 10) { // Σταματάει μετά από 10 δευτερόλεπτα
+          const el = document.getElementById("status-msg");
+          el.innerText = "✅ Η συσκευή εγγράφηκε επιτυχώς!\nID: " + subId;
+          el.style.color = "#16a34a";
+        } else if (attempts > 8) {
           clearInterval(interval);
-          document.getElementById("status-msg").innerText = "🔄 Γίνεται συγχρονισμός... Κάντε ξανά μια ανανέωση στη σελίδα.";
-          document.getElementById("status-msg").style.color = "#d97706";
+          const el = document.getElementById("status-msg");
+          el.innerText = "⚠️ Η άδεια είναι ενεργή, αλλά το OneSignal δεν επέστρεψε ID.\nΒεβαιωθείτε ότι το αρχείο OneSignalSDKWorker.js βρίσκεται στον ίδιο φάκελο.";
+          el.style.color = "#dc2626";
         }
       }, 1000);
-    }
-
-    function showSuccess(id) {
-      const el = document.getElementById("status-msg");
-      el.innerText = "✅ Η συσκευή εγγράφηκε επιτυχώς!\nID: " + id;
-      el.style.color = "#16a34a";
     }
 
     async function requestPushPermission() {
@@ -53,7 +55,7 @@
         try {
           await OneSignal.Notifications.requestPermission();
           await OneSignal.User.PushSubscription.optIn();
-          waitForSubscriptionId(OneSignal);
+          checkSubscription(OneSignal);
         } catch (error) {
           console.error("OneSignal Error:", error);
           alert("Σφάλμα: " + error.message);
