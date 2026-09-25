@@ -14,46 +14,53 @@
     OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "2ad617fe-461f-43bf-9755-d9cf5f994634",
-        serviceWorkerPath: "OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/" }
+        serviceWorkerPath: "OneSignalSDKWorker.js"
       });
 
-      // Αυτόματος έλεγχος αν η συσκευή είναι ήδη εγγεγραμμένη
-      const isSubscribed = OneSignal.User.PushSubscription.optedIn;
-      if (isSubscribed) {
-        const subId = OneSignal.User.PushSubscription.id;
-        document.getElementById("status-msg").innerText = "✅ Είστε ήδη εγγεγραμμένος!\nID: " + subId;
-        document.getElementById("status-msg").style.color = "#16a34a";
+      // Αυτόματος έλεγχος & ενεργοποίηση κατά τη φόρτωση
+      if (Notification.permission === "granted") {
+        await OneSignal.User.PushSubscription.optIn();
+        checkAndShowId(OneSignal);
       }
+
+      // Ακρόαση αλλαγών συνδρομής
+      OneSignal.User.PushSubscription.addEventListener("change", function(event) {
+        if (event.current.id) {
+          showSuccess(event.current.id);
+        }
+      });
     });
+
+    async function checkAndShowId(OneSignal) {
+      const subId = OneSignal.User.PushSubscription.id;
+      if (subId) {
+        showSuccess(subId);
+      }
+    }
+
+    function showSuccess(id) {
+      const el = document.getElementById("status-msg");
+      el.innerText = "✅ Η συσκευή εγγράφηκε επιτυχώς!\nID: " + id;
+      el.style.color = "#16a34a";
+    }
 
     async function requestPushPermission() {
       window.OneSignalDeferred.push(async function(OneSignal) {
         try {
-          // 1. Αίτημα αδείας
-          const permission = await Notification.requestPermission();
+          await OneSignal.Notifications.requestPermission();
+          await OneSignal.User.PushSubscription.optIn();
           
-          if (permission === "granted") {
-            await OneSignal.User.PushSubscription.optIn();
-            
-            // Αναμονή 1 δευτερόλεπτο για τη δημιουργία του ID
-            setTimeout(async () => {
-              const subId = OneSignal.User.PushSubscription.id;
-              if (subId) {
-                alert("🎉 Επιτυχία! Η συσκευή συνδέθηκε.\nID: " + subId);
-                document.getElementById("status-msg").innerText = "✅ Εγγεγραμμένος! ID: " + subId;
-                document.getElementById("status-msg").style.color = "#16a34a";
-              } else {
-                alert("✅ Η άδεια δόθηκε! Παρακαλώ κάντε ανανέωση (Refresh) τη σελίδα.");
-              }
-            }, 1000);
-            
-          } else {
-            alert("⚠️ Η άδεια δεν εγκρίθηκε από τον browser.");
-          }
+          setTimeout(() => {
+            const subId = OneSignal.User.PushSubscription.id;
+            if (subId) {
+              showSuccess(subId);
+              alert("🎉 Επιτυχία! Η συσκευή συνδέθηκε.\nID: " + subId);
+            } else {
+              alert("✅ Η άδεια είναι ενεργή! Κάντε ξανά μια ανανέωση στη σελίδα.");
+            }
+          }, 1500);
         } catch (error) {
           console.error("OneSignal Error:", error);
-          alert("Σφάλμα: " + error.message);
         }
       });
     }
@@ -72,8 +79,8 @@
 
   <div class="card">
     <h2>🔔 Σχολικές Ειδοποιήσεις</h2>
-    <p>Πατήστε το παρακάτω κουμπί για να ενεργοποιήσετε τις άμεσες ανακοινώσεις στη συσκευή σας.</p>
-    <button onclick="requestPushPermission()">🔔 Επιτρέπω τις Ειδοποιήσεις</button>
+    <p>Πατήστε το παρακάτω κουμπί για να επιβεβαιώσετε την εγγραφή της συσκευής σας.</p>
+    <button onclick="requestPushPermission()">🔔 Ενεργοποίηση Ειδοποιήσεων</button>
     <div id="status-msg"></div>
   </div>
 
