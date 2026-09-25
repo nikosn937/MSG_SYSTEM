@@ -38,7 +38,7 @@ def get_db_connection():
 import streamlit as st
 import streamlit.components.v1 as components
 
-# --- 3. ONESIGNAL PROMPT SCRIPT (ΓΙΑ TYPICAL SITE) ---
+# --- 3. ONESIGNAL PROMPT SCRIPT ---
 def inject_onesignal_script():
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "2ad617fe-461f-43bf-9755-d9cf5f994634")
     
@@ -55,15 +55,74 @@ def inject_onesignal_script():
             safari_web_id: "web.onesignal.auto.12f40fc9-13d7-4ca9-8e4a-0a7d50f473bf",
             allowLocalhostAsSecureOrigin: true
           }});
+
+          // Εξαναγκασμός εμφάνισης Slidedown ακόμα και μέσα σε iframe
+          setTimeout(async () => {{
+            try {{
+              await OneSignal.Slidedown.promptPush();
+            }} catch (e) {{
+              console.log("Slidedown blocked in iframe");
+            }}
+          }}, 1000);
         }});
+
+        function forceSubscribe() {{
+          window.OneSignalDeferred.push(async function(OneSignal) {{
+            try {{
+              await OneSignal.Notifications.requestPermission();
+            }} catch(e) {{
+              // Αν μπλοκαριστεί από το iframe, ανοίγουμε τη σελίδα στο top window
+              window.open(window.location.href, '_top');
+            }}
+          }});
+        }}
       </script>
+      <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ 
+          font-family: system-ui, -apple-system, sans-serif; 
+          background: transparent; 
+        }}
+        .banner {{
+          background-color: #f0f7ff;
+          border: 1px solid #b3d8ff;
+          border-radius: 8px;
+          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }}
+        .banner-text {{
+          color: #1e3a8a;
+          font-size: 13px;
+          font-weight: 500;
+        }}
+        .btn-push {{
+          background-color: #1d4ed8;
+          color: #ffffff;
+          border: none;
+          padding: 8px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          border-radius: 6px;
+          cursor: pointer;
+          white-space: nowrap;
+        }}
+        .btn-push:hover {{
+          background-color: #1e40af;
+        }}
+      </style>
     </head>
-    <body style="margin:0; padding:0; background:transparent;">
+    <body>
+      <div class="banner">
+        <span class="banner-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε το κουμπί για να ενεργοποιήσετε τις ειδοποιήσεις.</span>
+        <button class="btn-push" onclick="forceSubscribe()">🔔 Ενεργοποίηση</button>
+      </div>
     </body>
     </html>
     """
-    # Μηδενικό ύψος αφού το Slide Prompt εμφανίζεται αυτόματα ως overlay στη σελίδα
-    components.html(onesignal_html, height=0)
+    components.html(onesignal_html, height=60)
 
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
