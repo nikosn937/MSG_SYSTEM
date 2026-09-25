@@ -17,25 +17,29 @@
         serviceWorkerPath: "OneSignalSDKWorker.js"
       });
 
-      // Αυτόματος έλεγχος & ενεργοποίηση κατά τη φόρτωση
+      // Αν υπάρχει ήδη άδεια, προσπάθησε να πάρεις το ID
       if (Notification.permission === "granted") {
         await OneSignal.User.PushSubscription.optIn();
-        checkAndShowId(OneSignal);
+        waitForSubscriptionId(OneSignal);
       }
-
-      // Ακρόαση αλλαγών συνδρομής
-      OneSignal.User.PushSubscription.addEventListener("change", function(event) {
-        if (event.current.id) {
-          showSuccess(event.current.id);
-        }
-      });
     });
 
-    async function checkAndShowId(OneSignal) {
-      const subId = OneSignal.User.PushSubscription.id;
-      if (subId) {
-        showSuccess(subId);
-      }
+    // Συνάρτηση που περιμένει μέχρι να παραχθεί το ID της συσκευής
+    async function waitForSubscriptionId(OneSignal) {
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        const subId = OneSignal.User.PushSubscription.id;
+        
+        if (subId) {
+          clearInterval(interval);
+          showSuccess(subId);
+        } else if (attempts > 10) { // Σταματάει μετά από 10 δευτερόλεπτα
+          clearInterval(interval);
+          document.getElementById("status-msg").innerText = "🔄 Γίνεται συγχρονισμός... Κάντε ξανά μια ανανέωση στη σελίδα.";
+          document.getElementById("status-msg").style.color = "#d97706";
+        }
+      }, 1000);
     }
 
     function showSuccess(id) {
@@ -49,18 +53,10 @@
         try {
           await OneSignal.Notifications.requestPermission();
           await OneSignal.User.PushSubscription.optIn();
-          
-          setTimeout(() => {
-            const subId = OneSignal.User.PushSubscription.id;
-            if (subId) {
-              showSuccess(subId);
-              alert("🎉 Επιτυχία! Η συσκευή συνδέθηκε.\nID: " + subId);
-            } else {
-              alert("✅ Η άδεια είναι ενεργή! Κάντε ξανά μια ανανέωση στη σελίδα.");
-            }
-          }, 1500);
+          waitForSubscriptionId(OneSignal);
         } catch (error) {
           console.error("OneSignal Error:", error);
+          alert("Σφάλμα: " + error.message);
         }
       });
     }
