@@ -14,7 +14,6 @@
       await OneSignal.init({
         appId: "2ad617fe-461f-43bf-9755-d9cf5f994634",
         serviceWorkerPath: "OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/MSG_SYSTEM/" },
         allowLocalhostAsSecureOrigin: true
       });
     });
@@ -22,67 +21,33 @@
     async function requestPushPermission() {
       window.OneSignalDeferred.push(async function(OneSignal) {
         try {
-          // Αίτημα δικαιώματος ειδοποιήσεων
           const permission = await OneSignal.Notifications.requestPermission();
           
           if (permission) {
-            alert("✅ Η εγγραφή σας στις ειδοποιήσεις ολοκληρώθηκε με επιτυχία!");
+            // Έλεγχος αν ο χρήστης εγγράφηκε επιτυχώς στο OneSignal
+            const id = await OneSignal.User.PushSubscription.id;
+            if (id) {
+              alert("✅ Η εγγραφή σας ολοκληρώθηκε με επιτυχία!\nID Συσκευής: " + id);
+            } else {
+              alert("✅ Η άδεια δόθηκε! Γίνεται ολοκλήρωση της εγγραφής...");
+            }
           } else {
-            alert("⚠️ Δεν δώσατε άδεια για ειδοποιήσεις. Μπορείτε να το αλλάξετε από τις ρυθμίσεις του browser σας.");
+            alert("⚠️ Δεν δώσατε άδεια για ειδοποιήσεις.");
           }
         } catch (error) {
           console.error("OneSignal Error:", error);
-          alert("Σφάλμα κατά την εγγραφή: " + error.message);
+          alert("Σφάλμα: " + error.message);
         }
       });
     }
   </script>
 
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      background-color: #f1f5f9;
-    }
-    .card {
-      background: white;
-      padding: 32px 24px;
-      border-radius: 16px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-      text-align: center;
-      max-width: 380px;
-      width: 90%;
-    }
-    h2 {
-      margin-top: 0;
-      color: #0f172a;
-      font-size: 22px;
-    }
-    p {
-      color: #475569;
-      font-size: 15px;
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
-    button {
-      background-color: #2563eb;
-      color: white;
-      border: none;
-      padding: 14px 20px;
-      font-size: 16px;
-      font-weight: 600;
-      border-radius: 10px;
-      cursor: pointer;
-      width: 100%;
-      transition: background-color 0.2s ease;
-    }
-    button:active {
-      background-color: #1d4ed8;
-    }
+    body { font-family: system-ui, -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f1f5f9; }
+    .card { background: white; padding: 32px 24px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); text-align: center; max-width: 380px; width: 90%; }
+    h2 { margin-top: 0; color: #0f172a; font-size: 22px; }
+    p { color: #475569; font-size: 15px; line-height: 1.5; margin-bottom: 24px; }
+    button { background-color: #2563eb; color: white; border: none; padding: 14px 20px; font-size: 16px; font-weight: 600; border-radius: 10px; cursor: pointer; width: 100%; }
   </style>
 </head>
 <body>
