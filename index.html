@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ενεργοποίηση Ειδοποιήσεων</title>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "2ad617fe-461f-43bf-9755-d9cf5f994634",
+      });
+    });
+
+    function subscribeUser() {
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.Notifications.requestPermission();
+      });
+    }
+  </script>
+  <style>
+    body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f8fafc; text-align: center; padding: 20px; }
+    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); max-width: 400px; }
+    button { background-color: #2563eb; color: white; border: none; padding: 14px 28px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 20px; width: 100%; }
+    button:hover { background-color: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🔔 Σχολικές Ειδοποιήσεις</h2>
+    <p>Πατήστε το παρακάτω κουμπί για να ενεργοποιήσετε τις άμεσες ειδοποιήσεις στη συσκευή σας.</p>
+    <button onclick="subscribeUser()">🔔 Επιτρέπω τις Ειδοποιήσεις</button>
+  </div>
+</body>
+</html>
