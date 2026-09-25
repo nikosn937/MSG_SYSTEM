@@ -13,46 +13,64 @@ st.set_page_config(
 
 
 
+import streamlit as st
+import streamlit.components.v1 as components
+
 # --- 1. ΣΕΛΙΔΑ ΕΓΓΡΑΦΗΣ ONESIGNAL (ΑΝΟΙΓΕΙ ΕΚΤΟΣ IFRAME) ---
 if st.query_params.get("subscribe") == "1":
     st.set_page_config(page_title="Ενεργοποίηση Ειδοποιήσεων", page_icon="🔔")
     st.markdown("## 🔔 Ενεργοποίηση Ειδοποιήσεων Σχολείου")
-    st.write("Πατήστε το κουμπί παρακάτω για να επιτρέψετε τις ειδοποιήσεις στη συσκευή σας.")
+    st.write("Πατήστε το παρακάτω κουμπί για να επιτρέψετε τις ειδοποιήσεις στη συσκευή σας.")
     
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "2ad617fe-461f-43bf-9755-d9cf5f994634")
     
-    # Εκτέλεση σε ξεχωριστή καρτέλα χωρίς περιορισμούς iframe
-    top_level_html = f"""
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    # Μεταφορά του Script στο parent/top window για να παρακαμφθεί πλήρως το iframe restriction
+    top_level_script = f"""
     <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {{
-        await OneSignal.init({{
-          appId: "{app_id}",
-          safari_web_id: "web.onesignal.auto.12f40fc9-13d7-4ca9-8e4a-0a7d50f473bf"
-        }});
-      }});
+      (function() {{
+        const parentDoc = window.parent.document;
+        
+        // Φόρτωση του SDK στο κύριο έγγραφο (Top Window)
+        if (!parentDoc.getElementById('onesignal-sdk')) {{
+          const script = parentDoc.createElement('script');
+          script.id = 'onesignal-sdk';
+          script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+          script.defer = true;
+          parentDoc.head.appendChild(script);
+        }}
 
-      async function requestPermissionNow() {{
-        window.OneSignalDeferred.push(async function(OneSignal) {{
-          try {{
-            await OneSignal.Notifications.requestPermission();
-            alert("Ευχαριστούμε! Οι ειδοποιήσεις ενεργοποιήθηκαν επιτυχώς. Μπορείτε να κλείσετε αυτή την καρτέλα.");
-            window.close();
-          }} catch(e) {{
-            alert("Παρακαλούμε επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του browser σας.");
-          }}
+        window.parent.OneSignalDeferred = window.parent.OneSignalDeferred || [];
+        window.parent.OneSignalDeferred.push(async function(OneSignal) {{
+          await OneSignal.init({{
+            appId: "{app_id}",
+            safari_web_id: "web.onesignal.auto.12f40fc9-13d7-4ca9-8e4a-0a7d50f473bf",
+            allowLocalhostAsSecureOrigin: true
+          }});
         }});
-      }}
+
+        // Συνάρτηση ενεργοποίησης στο top window
+        window.parent.triggerNativePrompt = async function() {{
+          window.parent.OneSignalDeferred.push(async function(OneSignal) {{
+            try {{
+              const permission = await OneSignal.Notifications.requestPermission();
+              if (permission) {{
+                alert("Ευχαριστούμε! Οι ειδοποιήσεις ενεργοποιήθηκαν επιτυχώς.");
+              }}
+            }} catch(e) {{
+              alert("Επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του browser σας.");
+            }}
+          }});
+        }};
+      }})();
     </script>
+
     <br>
-    <button onclick="requestPermissionNow()" style="background:#2563eb; color:white; border:none; padding:14px 28px; font-size:16px; font-weight:bold; border-radius:8px; cursor:pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <button onclick="window.parent.triggerNativePrompt()" style="background:#2563eb; color:white; border:none; padding:14px 28px; font-size:16px; font-weight:bold; border-radius:8px; cursor:pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
       🔔 Επιτρέπω τις Ειδοποιήσεις
     </button>
     """
-    components.html(top_level_html, height=150)
-    st.stop()  # Σταματάει την εκτέλεση του υπολοίπου app μόνο για τη συγκεκριμένη καρτέλα
-
+    components.html(top_level_script, height=150)
+    st.stop()
 # --- 2. ΣΥΝΔΕΣΗ ΜΕ ΑΠΟΜΑΚΡΥΣΜΕΝΟ SQL SERVER (FreeTDS) ---
 def get_db_connection():
     try:
