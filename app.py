@@ -185,7 +185,7 @@ def inject_onesignal_script():
     </html>
     """
     # Αυξάνουμε το height σε 90px για να φαίνεται ολόκληρο το πλαίσιο και το κουμπί
-    components.html(onesignal_html, height=130)
+    components.html(onesignal_html, height=180)
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
