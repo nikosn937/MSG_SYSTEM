@@ -46,37 +46,44 @@ def inject_onesignal_script():
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
       <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ 
+        html, body {{ 
+          margin: 0; 
+          padding: 0; 
           font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
           background: transparent; 
+          overflow: hidden;
         }}
         .banner {{
           background-color: #f0f7ff;
           border: 1px solid #b3d8ff;
           border-radius: 8px;
-          padding: 10px 14px;
+          padding: 12px 16px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
+          gap: 12px;
+          margin: 4px 2px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }}
         .banner-text {{
           color: #1e3a8a;
-          font-size: 13px;
+          font-size: 14px;
           font-weight: 500;
+          line-height: 1.3;
         }}
         .btn-push {{
           background-color: #1d4ed8;
           color: #ffffff;
           border: none;
-          padding: 8px 14px;
-          font-size: 12px;
+          padding: 9px 16px;
+          font-size: 13px;
           font-weight: 600;
           border-radius: 6px;
           cursor: pointer;
           white-space: nowrap;
+          transition: background-color 0.2s;
         }}
         .btn-push:hover {{
           background-color: #1e40af;
@@ -89,7 +96,6 @@ def inject_onesignal_script():
           const left = (screen.width - width) / 2;
           const top = (screen.height - height) / 2;
 
-          // Ανοίγουμε αυτόνομο παράθυρο εκτός Streamlit iframe
           const win = window.open(
             "", 
             "OneSignalAuth", 
@@ -165,7 +171,7 @@ def inject_onesignal_script():
               </html>
             `);
           }} else {{
-            alert("Παρακαλώ επιτρέψτε τα αναδυόμενα παράθυρα (Pop-ups) στον browser σας για να ολοκληρωθεί η εγγραφή.");
+            alert("Παρακαλώ επιτρέψτε τα αναδυόμενα παράθυρα (Pop-ups) στον browser σας.");
           }}
         }}
       </script>
@@ -178,8 +184,8 @@ def inject_onesignal_script():
     </body>
     </html>
     """
-    components.html(onesignal_html, height=55)
-
+    # Αυξάνουμε το height σε 90px για να φαίνεται ολόκληρο το πλαίσιο και το κουμπί
+    components.html(onesignal_html, height=90)
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
