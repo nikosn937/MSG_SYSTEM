@@ -14,9 +14,8 @@
     OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "2ad617fe-461f-43bf-9755-d9cf5f994634",
-        serviceWorkerPath: "OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/MSG_SYSTEM/" },
-        path: "/MSG_SYSTEM/"
+        serviceWorkerPath: "https://nikosn937.github.io/MSG_SYSTEM/OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/MSG_SYSTEM/" }
       });
 
       // Αυτόματη προσπάθεια λήψης ID αν υπάρχει άδεια
@@ -41,11 +40,11 @@
           const el = document.getElementById("status-msg");
           el.innerText = "✅ Η συσκευή εγγράφηκε επιτυχώς!\nID: " + subId;
           el.style.color = "#16a34a";
-        } else if (attempts > 8) {
+        } else if (attempts > 10) {
           clearInterval(interval);
           const el = document.getElementById("status-msg");
-          el.innerText = "⚠️ Η άδεια είναι ενεργή, αλλά το OneSignal δεν επέστρεψε ID.\nΒεβαιωθείτε ότι το αρχείο OneSignalSDKWorker.js βρίσκεται στον ίδιο φάκελο.";
-          el.style.color = "#dc2626";
+          el.innerText = "🔄 Γίνεται ολοκλήρωση εγγραφής... Κάντε ξανά μια ανανέωση τη σελίδα σε 5 δευτερόλεπτα.";
+          el.style.color = "#d97706";
         }
       }, 1000);
     }
