@@ -21,26 +21,15 @@ st.set_page_config(
 import streamlit as st
 import streamlit.components.v1 as components
 
+import streamlit as st
+
 st.subheader("🔔 Ειδοποιήσεις Σχολείου")
 st.write("Για να λαμβάνετε άμεσες ειδοποιήσεις στο κινητό σας, πατήστε το παρακάτω κουμπί:")
 
-# Αντικαταστήστε το URL με το σύνδεσμο της δικής σας Bridge σελίδας (π.χ. στο GitHub Pages)
+# Αντικαταστήστε το URL με το σύνδεσμο της Bridge σελίδας σας
 bridge_url = "https://<your-username>.github.io/<repo-name>/"
 
-st.markdown(
-    f'''<a href="{bridge_url}" target="_blank" style="
-        display: inline-block;
-        padding: 12px 24px;
-        background-color: #2563eb;
-        color: white;
-        text-decoration: none;
-        font-weight: bold;
-        border-radius: 8px;
-        text-align: center;">
-        🔔 Ενεργοποίηση Ειδοποιήσεων
-    </a>''',
-    unsafe_allow_html=True
-)
+st.link_button("🔔 Ενεργοποίηση Ειδοποιήσεων", bridge_url, use_container_width=True)
 # --- 2. ΣΥΝΔΕΣΗ ΜΕ ΑΠΟΜΑΚΡΥΣΜΕΝΟ SQL SERVER (FreeTDS) ---
 def get_db_connection():
     try:
