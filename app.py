@@ -27,7 +27,7 @@ st.subheader("🔔 Ειδοποιήσεις Σχολείου")
 st.write("Για να λαμβάνετε άμεσες ειδοποιήσεις στο κινητό σας, πατήστε το παρακάτω κουμπί:")
 
 # Αντικαταστήστε το URL με το σύνδεσμο της Bridge σελίδας σας
-bridge_url = "https://<your-username>.github.io/<repo-name>/"
+bridge_url = "https://github.com/nikosn937/MSG_SYSTEM/blob/main/OneSignalSDKWorker.js"
 
 st.link_button("🔔 Ενεργοποίηση Ειδοποιήσεων", bridge_url, use_container_width=True)
 # --- 2. ΣΥΝΔΕΣΗ ΜΕ ΑΠΟΜΑΚΡΥΣΜΕΝΟ SQL SERVER (FreeTDS) ---
