@@ -4,6 +4,11 @@ import pandas as pd
 import requests
 import streamlit.components.v1 as components
 
+# --- HACK: ΣΕΡΒΙΡΙΣΜΑ SERVICE WORKER ΓΙΑ ONESIGNAL ---
+if "OneSignalSDKWorker.js" in st.query_params.get("page", "") or st.query_params.get("file") == "OneSignalSDKWorker.js":
+    st.write("importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.worker.js');")
+    st.stop()
+
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
     page_title="Σχολικό Portal Μηνυμάτων",
