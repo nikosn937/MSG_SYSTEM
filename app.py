@@ -4,11 +4,6 @@ import pandas as pd
 import requests
 import streamlit.components.v1 as components
 
-# --- HACK: ΣΕΡΒΙΡΙΣΜΑ SERVICE WORKER ΓΙΑ ONESIGNAL ---
-if "OneSignalSDKWorker.js" in st.query_params.get("page", "") or st.query_params.get("file") == "OneSignalSDKWorker.js":
-    st.write("importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.worker.js');")
-    st.stop()
-
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
     page_title="Σχολικό Portal Μηνυμάτων",
@@ -16,20 +11,6 @@ st.set_page_config(
     layout="wide"
 )
 
-
-
-import streamlit as st
-import streamlit.components.v1 as components
-
-import streamlit as st
-
-st.subheader("🔔 Ειδοποιήσεις Σχολείου")
-st.write("Για να λαμβάνετε άμεσες ειδοποιήσεις στο κινητό σας, πατήστε το παρακάτω κουμπί:")
-
-# Αντικαταστήστε το URL με το σύνδεσμο της Bridge σελίδας σας
-bridge_url = "https://github.com/nikosn937/MSG_SYSTEM/blob/main/OneSignalSDKWorker.js"
-
-st.link_button("🔔 Ενεργοποίηση Ειδοποιήσεων", bridge_url, use_container_width=True)
 # --- 2. ΣΥΝΔΕΣΗ ΜΕ ΑΠΟΜΑΚΡΥΣΜΕΝΟ SQL SERVER (FreeTDS) ---
 def get_db_connection():
     try:
@@ -54,37 +35,8 @@ def get_db_connection():
     except Exception as e:
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
-import streamlit as st
-import streamlit.components.v1 as components
 
-# --- ONESIGNAL BANNER SCRIPT ---
-def inject_onesignal_script():
-    # Ο σύνδεσμος ανοίγει την εφαρμογή σας σε νέα καρτέλα με την παράμετρο ?subscribe=1
-    target_url = "?subscribe=1"
-    
-    banner_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        html, body {{ margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; background: transparent; overflow: hidden; }}
-        .banner {{ background-color: #f0f7ff; border: 1px solid #b3d8ff; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }}
-        .banner-text {{ color: #1e3a8a; font-size: 14px; font-weight: 500; }}
-        .btn-link {{ background-color: #1d4ed8; color: #ffffff; text-decoration: none; padding: 9px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; display: inline-block; white-space: nowrap; }}
-        .btn-link:hover {{ background-color: #1e40af; }}
-      </style>
-    </head>
-    <body>
-      <div class="banner">
-        <span class="banner-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε για ενεργοποίηση ανακοινώσεων στη συσκευή σας.</span>
-        <a class="btn-link" href="{target_url}" target="_blank">🔔 Ενεργοποίηση</a>
-      </div>
-    </body>
-    </html>
-    """
-    components.html(banner_html, height=65)
-# --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
     rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
@@ -100,7 +52,7 @@ def send_onesignal_notification(title, message_text):
 
     payload = {
         "app_id": app_id,
-        "included_segments": ["Subscribed Users"],  # Στέλνει σε όλους τους συνδεδεμένους χρήστες
+        "included_segments": ["Subscribed Users"],
         "headings": {"el": title, "en": title},
         "contents": {"el": message_text, "en": message_text}
     }
@@ -117,7 +69,7 @@ def send_onesignal_notification(title, message_text):
         st.error(f"Σφάλμα αποστολής Push: {e}")
         return False
 
-# --- 5. SESSION STATE ---
+# --- 4. SESSION STATE ---
 if "user_role" not in st.session_state:
     st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
@@ -128,7 +80,7 @@ def logout():
     st.session_state["user_info"] = None
     st.rerun()
 
-# --- 6. ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LOGIN) ---
+# --- 5. ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LOGIN) ---
 if st.session_state["user_role"] is None:
     st.title("💬 Σχολικό Portal Μηνυμάτων & Ενημερώσεων")
     st.subheader("Σύνδεση στο Σύστημα")
@@ -202,7 +154,7 @@ if st.session_state["user_role"] is None:
                     else:
                         st.error("❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία.")
 
-# --- 7. ΠΟΡΤΑΛ ΑΠΟΣТОΛΕΑ (ADMIN / TEACHER) ---
+# --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     st.sidebar.title("⚙️ Διαχείριση Αποστολών")
     st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
@@ -215,7 +167,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
     else:
         admin_tab1 = st.container()
 
-    # TAB 1: ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΩΝ
+    # TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ
     with admin_tab1:
         st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
@@ -299,7 +251,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 student_fn = str(row['StudentFirstName']).strip()
                                 student_ln = str(row['StudentLastName']).strip()
 
-                                # 1. Τμήμα
                                 cursor.execute("SELECT ClassID FROM Classes WHERE ClassName = ?", (class_name,))
                                 class_row = cursor.fetchone()
                                 if class_row:
@@ -309,7 +260,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                     cursor.execute("SELECT @@IDENTITY")
                                     class_id = cursor.fetchone()[0]
 
-                                # 2. Μαθητής
                                 cursor.execute(
                                     "INSERT INTO Students (FirstName, LastName, ClassID) VALUES (?, ?, ?)",
                                     (student_fn, student_ln, class_id)
@@ -318,7 +268,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 student_id = cursor.fetchone()[0]
                                 imported_students += 1
 
-                                # 3. Γονέας 1
                                 p1_fn = str(row.get('Parent1_FirstName', '')).strip()
                                 p1_ln = str(row.get('Parent1_LastName', '')).strip()
                                 raw_p1 = row.get('Parent1_Phone', '')
@@ -343,7 +292,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                         (student_id, p1_id, student_id, p1_id)
                                     )
 
-                                # 4. Γονέας 2
                                 p2_fn = str(row.get('Parent2_FirstName', '')).strip()
                                 p2_ln = str(row.get('Parent2_LastName', '')).strip()
                                 raw_p2 = row.get('Parent2_Phone', '')
@@ -376,18 +324,23 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                         finally:
                             conn.close()
 
-# --- 8. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
+# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
     parent_id = st.session_state["user_info"]["id"]
     parent_name = st.session_state["user_info"]["name"]
-
-    # Ενεργοποίηση διαλόγου ειδοποιήσεων OneSignal
-    inject_onesignal_script()
 
     st.sidebar.title("💬 Portal Μηνυμάτων")
     st.sidebar.write(f"👤 Γονέας: **{parent_name}**")
     if st.sidebar.button("🚪 Αποσύνδεση"):
         logout()
+
+    # --- BANNER ΕΓΓΡΑΦΗΣ ΣΤΙΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ---
+    st.info("🔔 **Ειδοποιήσεις Σχολείου:** Για να λαμβάνετε άμεσες ειδοποιήσεις στο κινητό σας, ενεργοποιήστε τις ειδοποιήσεις.")
+    
+    # ΑΛΛΑΞΤΕ το παρακάτω link με το πραγματικό URL του Bridge Page σας (π.χ. στο GitHub Pages / Vercel)
+    bridge_url = "https://nikosn937.github.io/MSG_SYSTEM/"
+    st.link_button("🔔 Ενεργοποίηση Ειδοποιήσεων στο Κινητό", bridge_url, use_container_width=True)
+    st.markdown("---")
 
     st.header("📥 Εισερχόμενα Μηνύματα")
 
