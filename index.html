@@ -14,39 +14,32 @@
     OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "2ad617fe-461f-43bf-9755-d9cf5f994634",
-        serviceWorkerPath: "https://nikosn937.github.io/MSG_SYSTEM/OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/MSG_SYSTEM/" }
+        serviceWorkerPath: "OneSignalSDKWorker.js",
+        pagePath: "/MSG_SYSTEM/"
       });
 
-      // Αυτόματη προσπάθεια λήψης ID αν υπάρχει άδεια
-      if (Notification.permission === "granted") {
-        try {
-          await OneSignal.User.PushSubscription.optIn();
-          checkSubscription(OneSignal);
-        } catch (e) {
-          console.error(e);
+      // Ακρόαση της δημιουργίας του Subscription ID σε πραγματικό χρόνο
+      OneSignal.User.PushSubscription.addEventListener("change", function(event) {
+        if (event.current.id) {
+          showSuccess(event.current.id);
         }
-      }
+      });
+
+      // Έλεγχος αν η συσκευή έχει ήδη πάρει ID
+      checkSub(OneSignal);
     });
 
-    async function checkSubscription(OneSignal) {
-      let attempts = 0;
-      const interval = setInterval(async () => {
-        attempts++;
-        const subId = OneSignal.User.PushSubscription.id;
-        
-        if (subId) {
-          clearInterval(interval);
-          const el = document.getElementById("status-msg");
-          el.innerText = "✅ Η συσκευή εγγράφηκε επιτυχώς!\nID: " + subId;
-          el.style.color = "#16a34a";
-        } else if (attempts > 10) {
-          clearInterval(interval);
-          const el = document.getElementById("status-msg");
-          el.innerText = "🔄 Γίνεται ολοκλήρωση εγγραφής... Κάντε ξανά μια ανανέωση τη σελίδα σε 5 δευτερόλεπτα.";
-          el.style.color = "#d97706";
-        }
-      }, 1000);
+    async function checkSub(OneSignal) {
+      const subId = OneSignal.User.PushSubscription.id;
+      if (subId) {
+        showSuccess(subId);
+      }
+    }
+
+    function showSuccess(id) {
+      const el = document.getElementById("status-msg");
+      el.innerText = "✅ Η συσκευή εγγράφηκε επιτυχώς!\nID: " + id;
+      el.style.color = "#16a34a";
     }
 
     async function requestPushPermission() {
@@ -54,7 +47,18 @@
         try {
           await OneSignal.Notifications.requestPermission();
           await OneSignal.User.PushSubscription.optIn();
-          checkSubscription(OneSignal);
+          
+          // Μικρή αναμονή για την ολοκλήρωση του handshake
+          setTimeout(() => {
+            const subId = OneSignal.User.PushSubscription.id;
+            if (subId) {
+              showSuccess(subId);
+            } else {
+              document.getElementById("status-msg").innerText = "⏳ Γίνεται καταχώριση στη βάση... Παρακαλώ περιμένετε λίγα δευτερόλεπτα.";
+              document.getElementById("status-msg").style.color = "#d97706";
+            }
+          }, 1500);
+
         } catch (error) {
           console.error("OneSignal Error:", error);
           alert("Σφάλμα: " + error.message);
