@@ -21,59 +21,26 @@ st.set_page_config(
 import streamlit as st
 import streamlit.components.v1 as components
 
-# --- 1. ΣΕΛΙΔΑ ΕΓΓΡΑΦΗΣ ONESIGNAL (XORIS LOCAL SERVICE WORKER) ---
-if st.query_params.get("subscribe") == "1":
-    st.set_page_config(page_title="Ενεργοποίηση Ειδοποιήσεων", page_icon="🔔")
-    st.markdown("## 🔔 Ενεργοποίηση Ειδοποιήσεων Σχολείου")
-    st.write("Πατήστε το παρακάτω κουμπί για να επιτρέψετε τις ειδοποιήσεις στη συσκευή σας.")
-    
-    app_id = st.secrets.get("ONESIGNAL_APP_ID", "2ad617fe-461f-43bf-9755-d9cf5f994634")
-    
-    script_code = f"""
-    <script>
-      (function() {{
-        const parentDoc = window.parent.document;
-        
-        if (!parentDoc.getElementById('onesignal-sdk')) {{
-          const script = parentDoc.createElement('script');
-          script.id = 'onesignal-sdk';
-          script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-          script.defer = true;
-          parentDoc.head.appendChild(script);
-        }}
+st.subheader("🔔 Ειδοποιήσεις Σχολείου")
+st.write("Για να λαμβάνετε άμεσες ειδοποιήσεις στο κινητό σας, πατήστε το παρακάτω κουμπί:")
 
-        window.parent.OneSignalDeferred = window.parent.OneSignalDeferred || [];
-        window.parent.OneSignalDeferred.push(async function(OneSignal) {{
-          await OneSignal.init({{
-            appId: "{app_id}",
-            serviceWorkerParam: {{ scope: "/" }},
-            serviceWorkerPath: "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.worker.js",
-            allowLocalhostAsSecureOrigin: true
-          }});
-        }});
+# Αντικαταστήστε το URL με το σύνδεσμο της δικής σας Bridge σελίδας (π.χ. στο GitHub Pages)
+bridge_url = "https://<your-username>.github.io/<repo-name>/"
 
-        window.parent.triggerNativePrompt = async function() {{
-          window.parent.OneSignalDeferred.push(async function(OneSignal) {{
-            try {{
-              const permission = await OneSignal.Notifications.requestPermission();
-              if (permission) {{
-                alert("Ευχαριστούμε! Η εγγραφή ολοκληρώθηκε επιτυχώς.");
-              }}
-            }} catch(e) {{
-              alert("Επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του browser σας.");
-            }}
-          }});
-        }};
-      }})();
-    </script>
-
-    <br>
-    <button onclick="window.parent.triggerNativePrompt()" style="background:#2563eb; color:white; border:none; padding:14px 28px; font-size:16px; font-weight:bold; border-radius:8px; cursor:pointer;">
-      🔔 Επιτρέπω τις Ειδοποιήσεις
-    </button>
-    """
-    components.html(script_code, height=150)
-    st.stop()
+st.markdown(
+    f'''<a href="{bridge_url}" target="_blank" style="
+        display: inline-block;
+        padding: 12px 24px;
+        background-color: #2563eb;
+        color: white;
+        text-decoration: none;
+        font-weight: bold;
+        border-radius: 8px;
+        text-align: center;">
+        🔔 Ενεργοποίηση Ειδοποιήσεων
+    </a>''',
+    unsafe_allow_html=True
+)
 # --- 2. ΣΥΝΔΕΣΗ ΜΕ ΑΠΟΜΑΚΡΥΣΜΕΝΟ SQL SERVER (FreeTDS) ---
 def get_db_connection():
     try:
