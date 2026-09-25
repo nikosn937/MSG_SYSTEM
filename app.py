@@ -38,7 +38,7 @@ def get_db_connection():
 import streamlit as st
 import streamlit.components.v1 as components
 
-# --- 3. ONESIGNAL PROMPT SCRIPT ---
+# --- 3. ONESIGNAL PROMPT SCRIPT (ΓΙΑ TYPICAL SITE) ---
 def inject_onesignal_script():
     app_id = st.secrets.get("ONESIGNAL_APP_ID", "2ad617fe-461f-43bf-9755-d9cf5f994634")
     
@@ -56,69 +56,15 @@ def inject_onesignal_script():
             allowLocalhostAsSecureOrigin: true
           }});
         }});
-
-        async function triggerPush() {{
-          window.OneSignalDeferred.push(async function(OneSignal) {{
-            try {{
-              // Αίτημα άδειας στον περιηγητή
-              const permission = await OneSignal.Notifications.requestPermission();
-              if (permission) {{
-                alert("Ευχαριστούμε! Οι ειδοποιήσεις ενεργοποιήθηκαν.");
-              }}
-            }} catch(e) {{
-              console.error(e);
-              alert("Δεν ήταν δυνατή η ενεργοποίηση. Ελέγξτε τις ρυθμίσεις ειδοποιήσεων του browser.");
-            }}
-          }});
-        }}
       </script>
-      <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ 
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-          background: transparent; 
-        }}
-        .banner {{
-          background-color: #f0f7ff;
-          border: 1px solid #b3d8ff;
-          border-radius: 8px;
-          padding: 10px 14px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }}
-        .banner-text {{
-          color: #1e3a8a;
-          font-size: 13px;
-          font-weight: 500;
-        }}
-        .btn-push {{
-          background-color: #1d4ed8;
-          color: #ffffff;
-          border: none;
-          padding: 7px 14px;
-          font-size: 12px;
-          font-weight: 600;
-          border-radius: 6px;
-          cursor: pointer;
-          white-space: nowrap;
-        }}
-        .btn-push:hover {{
-          background-color: #1e40af;
-        }}
-      </style>
     </head>
-    <body>
-      <div class="banner">
-        <span class="banner-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε για ενεργοποίηση ανακοινώσεων στη συσκευή σας.</span>
-        <button class="btn-push" onclick="triggerPush()">🔔 Ενεργοποίηση</button>
-      </div>
+    <body style="margin:0; padding:0; background:transparent;">
     </body>
     </html>
     """
-    # Το κρίσιμο σημείο: allow="notifications"
-    components.html(onesignal_html, height=55, scrolling=False)
+    # Μηδενικό ύψος αφού το Slide Prompt εμφανίζεται αυτόματα ως overlay στη σελίδα
+    components.html(onesignal_html, height=0)
+
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
     app_id = st.secrets.get("ONESIGNAL_APP_ID")
