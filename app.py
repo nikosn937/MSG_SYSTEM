@@ -46,41 +46,10 @@ def inject_onesignal_script():
     <!DOCTYPE html>
     <html>
     <head>
-      <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-      <script>
-        window.OneSignalDeferred = window.OneSignalDeferred || [];
-        OneSignalDeferred.push(async function(OneSignal) {{
-          await OneSignal.init({{
-            appId: "{app_id}",
-            safari_web_id: "web.onesignal.auto.12f40fc9-13d7-4ca9-8e4a-0a7d50f473bf",
-            allowLocalhostAsSecureOrigin: true
-          }});
-
-          // Εξαναγκασμός εμφάνισης Slidedown ακόμα και μέσα σε iframe
-          setTimeout(async () => {{
-            try {{
-              await OneSignal.Slidedown.promptPush();
-            }} catch (e) {{
-              console.log("Slidedown blocked in iframe");
-            }}
-          }}, 1000);
-        }});
-
-        function forceSubscribe() {{
-          window.OneSignalDeferred.push(async function(OneSignal) {{
-            try {{
-              await OneSignal.Notifications.requestPermission();
-            }} catch(e) {{
-              // Αν μπλοκαριστεί από το iframe, ανοίγουμε τη σελίδα στο top window
-              window.open(window.location.href, '_top');
-            }}
-          }});
-        }}
-      </script>
       <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{ 
-          font-family: system-ui, -apple-system, sans-serif; 
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
           background: transparent; 
         }}
         .banner {{
@@ -113,16 +82,103 @@ def inject_onesignal_script():
           background-color: #1e40af;
         }}
       </style>
+      <script>
+        function openSubscriptionPopup() {{
+          const width = 500;
+          const height = 420;
+          const left = (screen.width - width) / 2;
+          const top = (screen.height - height) / 2;
+
+          // Ανοίγουμε αυτόνομο παράθυρο εκτός Streamlit iframe
+          const win = window.open(
+            "", 
+            "OneSignalAuth", 
+            `width=${{width}},height=${{height}},top=${{top}},left=${{left}},resizable=yes,scrollbars=yes`
+          );
+
+          if (win) {{
+            win.document.write(`
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>Ενεργοποίηση Ειδοποιήσεων</title>
+                <meta charset="utf-8">
+                <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+                <style>
+                  body {{ 
+                    font-family: system-ui, sans-serif; 
+                    text-align: center; 
+                    padding: 30px 20px; 
+                    background-color: #f8fafc; 
+                    color: #1e293b; 
+                  }}
+                  .card {{
+                    background: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+                  }}
+                  h3 {{ margin-bottom: 12px; color: #0f172a; }}
+                  p {{ font-size: 14px; color: #475569; line-height: 1.5; margin-bottom: 20px; }}
+                  .btn {{
+                    background: #2563eb;
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    border-radius: 8px;
+                    cursor: pointer;
+                  }}
+                  .btn:hover {{ background: #1d4ed8; }}
+                </style>
+              </head>
+              <body>
+                <div class="card">
+                  <h3>🔔 Ενεργοποίηση Ειδοποιήσεων</h3>
+                  <p>Πατήστε το παρακάτω κουμπί και στη συνέχεια επιλέξτε <b>"Επιτρέπεται" (Allow)</b> στο αίτημα του περιηγητή.</p>
+                  <button class="btn" onclick="req()">Επιτρέπω τις Ειδοποιήσεις</button>
+                </div>
+
+                <script>
+                  window.OneSignalDeferred = window.OneSignalDeferred || [];
+                  OneSignalDeferred.push(async function(OneSignal) {{
+                    await OneSignal.init({{
+                      appId: "{app_id}",
+                      safari_web_id: "web.onesignal.auto.12f40fc9-13d7-4ca9-8e4a-0a7d50f473bf"
+                    }});
+                  }});
+
+                  async function req() {{
+                    window.OneSignalDeferred.push(async function(OneSignal) {{
+                      try {{
+                        await OneSignal.Notifications.requestPermission();
+                        alert("Ευχαριστούμε! Οι ειδοποιήσεις ενεργοποιήθηκαν επιτυχώς.");
+                        window.close();
+                      }} catch(e) {{
+                        alert("Παρακαλούμε επιτρέψτε τις ειδοποιήσεις από τις ρυθμίσεις του browser σας.");
+                      }}
+                    }});
+                  }}
+                </script>
+              </body>
+              </html>
+            `);
+          }} else {{
+            alert("Παρακαλώ επιτρέψτε τα αναδυόμενα παράθυρα (Pop-ups) στον browser σας για να ολοκληρωθεί η εγγραφή.");
+          }}
+        }}
+      </script>
     </head>
     <body>
       <div class="banner">
-        <span class="banner-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε το κουμπί για να ενεργοποιήσετε τις ειδοποιήσεις.</span>
-        <button class="btn-push" onclick="forceSubscribe()">🔔 Ενεργοποίηση</button>
+        <span class="banner-text">🔔 <b>Ειδοποιήσεις Σχολείου:</b> Πατήστε για ενεργοποίηση ανακοινώσεων στη συσκευή σας.</span>
+        <button class="btn-push" onclick="openSubscriptionPopup()">🔔 Ενεργοποίηση</button>
       </div>
     </body>
     </html>
     """
-    components.html(onesignal_html, height=60)
+    components.html(onesignal_html, height=55)
 
 # --- 4. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text):
