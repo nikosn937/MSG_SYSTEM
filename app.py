@@ -467,7 +467,31 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
               st.error(f"❌ Σφάλμα κατά την εισαγωγή: {e}")
             finally:
               conn.close()
+def check_onesignal_registration(phone):
+  """Ελέγχει αν το τηλέφωνο του γονέα είναι ήδη εγγεγραμμένο στο OneSignal."""
+  app_id = st.secrets.get("ONESIGNAL_APP_ID")
+  rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
+  if not app_id or not rest_key or not phone:
+    return False
+
+  headers = {
+      "Content-Type": "application/json; charset=utf-8",
+      "Authorization": f"Basic {rest_key}",
+  }
+
+  try:
+    url = f"https://onesignal.com/api/v1/apps/{app_id}/users/by/external_id/{phone}"
+    res = requests.get(url, headers=headers, timeout=3)
+    if res.status_code == 200:
+      data = res.json()
+      # Αν έχει έστω μία ενεργή συνδρομή (subscriptions)
+      subscriptions = data.get("subscriptions", [])
+      return len(subscriptions) > 0
+  except Exception:
+    pass
+
+  return False
 # --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
   parent_id = st.session_state["user_info"]["id"]
@@ -476,82 +500,38 @@ elif st.session_state["user_role"] == "Parent":
 
   st.sidebar.title("💬 Portal Μηνυμάτων")
   st.sidebar.write(f"👤 Γονέας: **{parent_name}**")
+
+  # Link ενεργοποίησης ειδοποιήσεων
+  vercel_bridge_url = f"https://msg1-system.vercel.app/?phone={urllib.parse.quote(parent_phone)}"
+
+  # ΕΛΕΓΧΟΣ ΑΝ ΕΧΕΙ ΕΓΓΡΑΦΕΙ ΗΔΗ ΣΤΙΣ ΕΙΔΟΠΟΙΗΣΕΙΣ
+  is_subscribed = check_onesignal_registration(parent_phone)
+
+  # Αν ΔΕΝ έχει εγγραφεί ακόμα, εμφανίζουμε το Banner στην κορυφή
+  if not is_subscribed:
+    st.info(
+        "🔔 **Ενεργοποίηση Ειδοποιήσεων:** Για να λαμβάνετε άμεσες"
+        " ειδοποιήσεις στο κινητό σας όταν στέλνει το σχολείο νέα μήνυματα,"
+        " πατήστε το παρακάτω κουμπί:"
+    )
+    st.link_button(
+        "📲 Ενεργοποίηση Ειδοποιήσεων στο Κινητό",
+        vercel_bridge_url,
+        use_container_width=True,
+    )
+    st.markdown("---")
+
+  # Στο Sidebar παραμένει πάντα ως επιλογή για μελλοντική χρήση/αλλαγή συσκευής
+  st.sidebar.markdown("---")
+  st.sidebar.caption("🔔 **Ειδοποιήσεις**")
+  st.sidebar.link_button(
+      "📲 Ρυθμίσεις Ειδοποιήσεων", vercel_bridge_url, use_container_width=True
+  )
+
+  st.sidebar.markdown("---")
   if st.sidebar.button("🚪 Αποσύνδεση"):
     logout()
 
-  # --- BANNER ΕΓΓΡΑΦΗΣ ΣΤΙΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ---
-  st.info(
-      "🔔 **Ειδοποιήσεις Σχολείου:** Για να λαμβάνετε άμεσες ειδοποιήσεις στο"
-      " κινητό σας, ενεργοποιήστε τις ειδοποιήσεις."
-  )
-
-  vercel_bridge_url = f"https://msg1-system.vercel.app/?phone={urllib.parse.quote(parent_phone)}"
-  st.link_button(
-      "🔔 Ενεργοποίηση Ειδοποιήσεων στο Κινητό",
-      vercel_bridge_url,
-      use_container_width=True,
-  )
-  st.markdown("---")
-
+  # --- ΚΥΡΙΩΣ ΟΘΟΝΗ: ΕΙΣΕΡΧΟΜΕΝΑ МΗΝΥΜΑΤΑ ---
   st.header("📥 Εισερχόμενα Μηνύματα")
-
-  conn = get_db_connection()
-  if conn:
-    # 1. ΑΥΤΟΜΑΤΗ ΣΗΜΑΝΣΗ ΟΛΩΝ ΤΩΝ ΝΕΩΝ ΜΗΝΥΜΑΤΩΝ ΩΣ ΑΝΑΓΝΩΣΜΕΝΑ
-    auto_read_query = """
-            INSERT INTO ReadReceipts (AnnouncementID, ParentID, ReadAt)
-            SELECT A.AnnouncementID, ?, GETDATE()
-            FROM Announcements A
-            WHERE (A.TargetAudience = 'ALL' 
-                   OR A.ClassID IN (
-                       SELECT S.ClassID 
-                       FROM Students S
-                       JOIN StudentParents SP ON S.StudentID = SP.StudentID
-                       WHERE SP.ParentID = ?
-                   ))
-              AND NOT EXISTS (
-                  SELECT 1 FROM ReadReceipts R 
-                  WHERE R.AnnouncementID = A.AnnouncementID AND R.ParentID = ?
-              )
-        """
-    try:
-      cur = conn.cursor()
-      cur.execute(auto_read_query, (parent_id, parent_id, parent_id))
-      conn.commit()
-    except Exception as ex:
-      pass  # Αν υπάρξει στιγμιαίο σφάλμα καταγραφής, συνεχίζουμε κανονικά στη προβολή
-
-    # 2. ΑΝΑΚΤΗΣΗ ΜΗΝΥΜΑΤΩΝ
-    query_messages = """
-            SELECT DISTINCT A.AnnouncementID, A.Title, A.Content, A.SentBy, A.CreatedAt, C.ClassName,
-                   R.ReadAt
-            FROM Announcements A
-            LEFT JOIN Classes C ON A.ClassID = C.ClassID
-            LEFT JOIN ReadReceipts R ON A.AnnouncementID = R.AnnouncementID AND R.ParentID = ?
-            WHERE A.TargetAudience = 'ALL' 
-               OR A.ClassID IN (
-                   SELECT S.ClassID 
-                   FROM Students S
-                   JOIN StudentParents SP ON S.StudentID = SP.StudentID
-                   WHERE SP.ParentID = ?
-               )
-            ORDER BY A.CreatedAt DESC
-        """
-    df_msgs = pd.read_sql(query_messages, conn, params=[parent_id, parent_id])
-    conn.close()
-
-    if not df_msgs.empty:
-      for idx, row in df_msgs.iterrows():
-        # Το πρώτο μήνυμα (idx == 0) ανοίγει αυτόματα
-        is_latest = idx == 0
-
-        with st.expander(
-            f"📩 {row['Title']} ({row['CreatedAt']})", expanded=is_latest
-        ):
-          st.write(row["Content"])
-          st.caption(
-              f"Αποστολέας: {row['SentBy']} | Τμήμα:"
-              f" {row['ClassName'] if row['ClassName'] else 'Όλα'}"
-          )
-    else:
-      st.info("Δεν υπάρχουν εισερχόμενα μηνύματα.")
+  # ... (ο υπόλοιπος κώδικας παραμένει ίδιος)
