@@ -56,10 +56,12 @@ def send_onesignal_notification(title, message_text, target_phones=None):
       "Authorization": f"Basic {rest_key}",
   }
 
+  # Προσθήκη του URL προορισμού ώστε το κλικ να οδηγεί στο Streamlit
   payload = {
       "app_id": app_id,
       "headings": {"el": title, "en": title},
       "contents": {"el": message_text, "en": message_text},
+      "url": "https://msgsys.streamlit.app",
   }
 
   # Στοχευμένη αποστολή σε συγκεκριμένα τηλέφωνα ή σε όλους
@@ -171,7 +173,7 @@ if st.session_state["user_role"] is None:
             st.session_state["user_info"] = {
                 "id": parent[0],
                 "name": f"{parent[1]} {parent[2]}",
-                "phone": clean_phone,  # Καθαρός αριθμός τηλεφώνου
+                "phone": clean_phone,
             }
             st.success(f"Καλώς ήρθατε, {parent[1]}!")
             st.rerun()
