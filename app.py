@@ -249,18 +249,19 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             )
             conn.commit()
 
-            # Εύρεση τηλεφώνων γονέων αν η αποστολή αφορά συγκεκριμένο τμήμα
-            target_phones = []
-            if target_audience == "CLASS" and class_id:
-              query_phones = """
-                                SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
-                                FROM Parents P
-                                JOIN StudentParents SP ON P.ParentID = SP.ParentID
-                                JOIN Students S ON SP.StudentID = S.StudentID
-                                WHERE S.ClassID = ?
-                            """
-              cursor.execute(query_phones, (class_id,))
-              target_phones = [row[0] for row[0] in cursor.fetchall() if row[0]]
+# Εύρεση τηλεφώνων γονέων αν η αποστολή αφορά συγκεκριμένο τμήμα
+target_phones = []
+if target_audience == "CLASS" and class_id:
+    query_phones = """
+        SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
+        FROM Parents P
+        JOIN StudentParents SP ON P.ParentID = SP.ParentID
+        JOIN Students S ON SP.StudentID = S.StudentID
+        WHERE S.ClassID = ?
+    """
+    cursor.execute(query_phones, (class_id,))
+    # ΔΙΟΡΘΩΣΗ: row αντί για row[0] στο for loop
+    target_phones = [row[0] for row in cursor.fetchall() if row[0]]
 
             conn.close()
             st.success("✅ Το μήνυμα καταχωρήθηκε στη βάση!")
