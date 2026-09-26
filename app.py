@@ -87,7 +87,7 @@ def send_onesignal_notification(title, message_text, target_phones=None):
 
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
-  """Ελέγχει αν το τηλέφωνο του γονέα είναι ήδη εγγεγραμμένο στο OneSignal."""
+  """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -105,12 +105,16 @@ def check_onesignal_registration(phone):
     if res.status_code == 200:
       data = res.json()
       subscriptions = data.get("subscriptions", [])
-      return len(subscriptions) > 0
+
+      # Ελέγχουμε αν υπάρχει τουλάχιστον μία συνδρομή που ΔΕΝ είναι disabled / opt-out
+      for sub in subscriptions:
+        # Αν η συνδρομή είναι ενεργή (enabled) και δεν έχει ανακληθεί το token
+        if sub.get("enabled", False) is True and not sub.get("opted_out", False):
+          return True
   except Exception:
     pass
 
   return False
-
 
 # --- 4. SESSION STATE & AUTO-LOGIN VIA URL ---
 if "user_role" not in st.session_state:
