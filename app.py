@@ -37,7 +37,7 @@ def get_db_connection():
     return None
 
 
-# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+# --- 3. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text, target_phones=None):
   """Στέλνει Push Notification μέσω OneSignal.
 
@@ -180,7 +180,7 @@ if st.session_state["user_role"] is None:
                 "❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία."
             )
 
-# --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
+# --- 6. ΠΟΡΤΑΛ ΑΠΟΣТОΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   st.sidebar.title("⚙️ Διαχείριση Αποστολών")
   st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
@@ -196,7 +196,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   else:
     admin_tab1 = st.container()
 
-  # TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ
+  # TAB 1: ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΩΝ
   with admin_tab1:
     st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
@@ -249,19 +249,18 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             )
             conn.commit()
 
-# Εύρεση τηλεφώνων γονέων αν η αποστολή αφορά συγκεκριμένο τμήμα
-target_phones = []
-if target_audience == "CLASS" and class_id:
-    query_phones = """
-        SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
-        FROM Parents P
-        JOIN StudentParents SP ON P.ParentID = SP.ParentID
-        JOIN Students S ON SP.StudentID = S.StudentID
-        WHERE S.ClassID = ?
-    """
-    cursor.execute(query_phones, (class_id,))
-    # ΔΙΟΡΘΩΣΗ: row αντί για row[0] στο for loop
-    target_phones = [row[0] for row in cursor.fetchall() if row[0]]
+            # Εύρεση τηλεφώνων γονέων αν η αποστολή αφορά συγκεκριμένο τμήμα
+            target_phones = []
+            if target_audience == "CLASS" and class_id:
+              query_phones = """
+                                SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
+                                FROM Parents P
+                                JOIN StudentParents SP ON P.ParentID = SP.ParentID
+                                JOIN Students S ON SP.StudentID = S.StudentID
+                                WHERE S.ClassID = ?
+                            """
+              cursor.execute(query_phones, (class_id,))
+              target_phones = [row[0] for row in cursor.fetchall() if row[0]]
 
             conn.close()
             st.success("✅ Το μήνυμα καταχωρήθηκε στη βάση!")
