@@ -38,10 +38,9 @@ def get_db_connection():
 
 # --- 3. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(title, message_text, target_phones=None):
-  """Στέλνει Push Notification μέσω OneSignal.
+  """Στέλνει εξατομικευμένο Push Notification ανά τηλέφωνο γονέα
 
-  Αν το target_phones περιέχει τηλέφωνα, προσθέτει την παράμετρο auto_phone στο
-  URL ώστε ο γονέας να συνδέεται αυτόματα με το κλικ!
+  ώστε το κλικ στην ειδοποίηση να περιέχει το auto_phone URL.
   """
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
@@ -57,74 +56,79 @@ def send_onesignal_notification(title, message_text, target_phones=None):
 
   base_url = "https://msgsys.streamlit.app"
 
-  payload = {
-      "app_id": app_id,
-      "headings": {"el": title, "en": title},
-      "contents": {"el": message_text, "en": message_text},
-      "url": base_url,
-  }
-
-  # Στοχευμένη αποστολή σε συγκεκριμένα τηλέφωνα
   if target_phones and len(target_phones) > 0:
-    payload["include_aliases"] = {"external_id": target_phones}
-    payload["target_channel"] = "push"
-
-    # Αν η αποστολή αφορά 1 συγκεκριμένο γονέα, περνάμε το τηλέφωνό του στο URL για Auto-Login
-    if len(target_phones) == 1:
-      payload["url"] = f"{base_url}/?auto_phone={target_phones[0]}"
+    success_count = 0
+    # Στέλνουμε ξεχωριστό notification για κάθε γονέα με το δικό του auto_phone URL
+    for phone in target_phones:
+      payload = {
+          "app_id": app_id,
+          "headings": {"el": title, "en": title},
+          "contents": {"el": message_text, "en": message_text},
+          "url": f"{base_url}/?auto_phone={phone}",
+          "include_aliases": {"external_id": [phone]},
+          "target_channel": "push",
+      }
+      try:
+        res = requests.post(
+            "https://onesignal.com/api/v1/notifications",
+            headers=headers,
+            json=payload,
+            timeout=5,
+        )
+        if res.status_code == 200:
+          success_count += 1
+      except Exception:
+        pass
+    return success_count > 0
   else:
-    payload["included_segments"] = ["Subscribed Users"]
-
-  try:
-    response = requests.post(
-        "https://onesignal.com/api/v1/notifications",
-        headers=headers,
-        json=payload,
-        timeout=5,
-    )
-    return response.status_code == 200
-  except Exception as e:
-    st.error(f"Σφάλμα αποστολής Push: {e}")
+    st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
     return False
 
 
 # --- 4. SESSION STATE & AUTO-LOGIN VIA URL ---
 if "user_role" not in st.session_state:
-    st.session_state["user_role"] = None
+  st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
-    st.session_state["user_info"] = None
+  st.session_state["user_info"] = None
 
 # ΕΛΕΓΧΟΣ ΓΙΑ AUTO-LOGIN ΑΠΟ URL PARAMETER (auto_phone)
 query_params = st.query_params
 if "auto_phone" in query_params and st.session_state["user_role"] is None:
-    auto_phone = str(query_params["auto_phone"]).strip().replace("+357", "").replace(" ", "").replace("-", "")
-    
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor()
-        query = """
+  auto_phone = (
+      str(query_params["auto_phone"])
+      .strip()
+      .replace("+357", "")
+      .replace(" ", "")
+      .replace("-", "")
+  )
+
+  conn = get_db_connection()
+  if conn:
+    cursor = conn.cursor()
+    query = """
             SELECT ParentID, FirstName, LastName, Phone 
             FROM Parents 
             WHERE LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', ''))) = ? 
               AND (IsActive = 1 OR IsActive IS NULL)
         """
-        cursor.execute(query, (auto_phone,))
-        parent = cursor.fetchone()
-        conn.close()
-        
-        if parent:
-            st.session_state["user_role"] = "Parent"
-            st.session_state["user_info"] = {
-                "id": parent[0],
-                "name": f"{parent[1]} {parent[2]}",
-                "phone": auto_phone
-            }
-            # ΔΙΟΡΘΩΣΗ: Κάνουμε rerun αμέσως για να παρακαμφθούν τα Tabs και το Login Form!
-            st.rerun()
+    cursor.execute(query, (auto_phone,))
+    parent = cursor.fetchone()
+    conn.close()
+
+    if parent:
+      st.session_state["user_role"] = "Parent"
+      st.session_state["user_info"] = {
+          "id": parent[0],
+          "name": f"{parent[1]} {parent[2]}",
+          "phone": auto_phone,
+      }
+      # Άμεσο Rerun για παράκαμψη της οθόνης Login/Tabs
+      st.rerun()
+
+
 def logout():
   st.session_state["user_role"] = None
   st.session_state["user_info"] = None
-  # Καθαρισμός των URL parameters κατά την αποσύνδεση
   st.query_params.clear()
   st.rerun()
 
@@ -283,7 +287,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             )
             conn.commit()
 
-            # Εύρεση τηλεφώνων γονέων αν η αποστολή αφορά συγκεκριμένο τμήμα
+            # Εύρεση τηλεφώνων γονέων για Push Notifications
             target_phones = []
             if target_audience == "CLASS" and class_id:
               query_phones = """
@@ -294,6 +298,14 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 WHERE S.ClassID = ?
                             """
               cursor.execute(query_phones, (class_id,))
+              target_phones = [row[0] for row in cursor.fetchall() if row[0]]
+            elif target_audience == "ALL":
+              query_phones = """
+                                SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', '')))
+                                FROM Parents
+                                WHERE IsActive = 1 OR IsActive IS NULL
+                            """
+              cursor.execute(query_phones)
               target_phones = [row[0] for row in cursor.fetchall() if row[0]]
 
             conn.close()
@@ -456,7 +468,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             finally:
               conn.close()
 
-# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
+# --- 7. ΠΟΡТАΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
   parent_id = st.session_state["user_info"]["id"]
   parent_name = st.session_state["user_info"]["name"]
@@ -467,13 +479,12 @@ elif st.session_state["user_role"] == "Parent":
   if st.sidebar.button("🚪 Αποσύνδεση"):
     logout()
 
-  # --- BANNER ΕΓΓΡΑΦΗΣ ΣΤΙΣ ΕΙΔΟΠΟΙΗΣΕΙΣ (VERCEL + PHONE PARAMETER) ---
+  # --- BANNER ΕΓΓΡΑΦΗΣ ΣΤΙΣ ΕΙΔΟΠΟΙΗΣΕΙΣ ---
   st.info(
       "🔔 **Ειδοποιήσεις Σχολείου:** Για να λαμβάνετε άμεσες ειδοποιήσεις στο"
       " κινητό σας, ενεργοποιήστε τις ειδοποιήσεις."
   )
 
-  # Δημιουργία δυναμικού Link με το τηλέφωνο του γονέα στο Vercel App
   vercel_bridge_url = f"https://msg1-system.vercel.app/?phone={urllib.parse.quote(parent_phone)}"
   st.link_button(
       "🔔 Ενεργοποίηση Ειδοποιήσεων στο Κινητό",
