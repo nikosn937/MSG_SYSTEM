@@ -3,7 +3,6 @@ import pandas as pd
 import pyodbc
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
@@ -41,8 +40,8 @@ def get_db_connection():
 def send_onesignal_notification(title, message_text, target_phones=None):
   """Στέλνει Push Notification μέσω OneSignal.
 
-  Αν το target_phones είναι None ή άδειο, στέλνει σε όλους (Subscribed
-  Users). Αν περιέχει λίστα από τηλέφωνα, στέλνει μόνο σε αυτά τα external_ids.
+  Αν το target_phones περιέχει τηλέφωνα, προσθέτει την παράμετρο auto_phone στο
+  URL ώστε ο γονέας να συνδέεται αυτόματα με το κλικ!
   """
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
@@ -56,18 +55,23 @@ def send_onesignal_notification(title, message_text, target_phones=None):
       "Authorization": f"Basic {rest_key}",
   }
 
-  # Προσθήκη του URL προορισμού ώστε το κλικ να οδηγεί στο Streamlit
+  base_url = "https://msgsys.streamlit.app"
+
   payload = {
       "app_id": app_id,
       "headings": {"el": title, "en": title},
       "contents": {"el": message_text, "en": message_text},
-      "url": "https://msgsys.streamlit.app",
+      "url": base_url,
   }
 
-  # Στοχευμένη αποστολή σε συγκεκριμένα τηλέφωνα ή σε όλους
+  # Στοχευμένη αποστολή σε συγκεκριμένα τηλέφωνα
   if target_phones and len(target_phones) > 0:
     payload["include_aliases"] = {"external_id": target_phones}
     payload["target_channel"] = "push"
+
+    # Αν η αποστολή αφορά 1 συγκεκριμένο γονέα, περνάμε το τηλέφωνό του στο URL για Auto-Login
+    if len(target_phones) == 1:
+      payload["url"] = f"{base_url}/?auto_phone={target_phones[0]}"
   else:
     payload["included_segments"] = ["Subscribed Users"]
 
@@ -84,16 +88,51 @@ def send_onesignal_notification(title, message_text, target_phones=None):
     return False
 
 
-# --- 4. SESSION STATE ---
+# --- 4. SESSION STATE & AUTO-LOGIN VIA URL ---
 if "user_role" not in st.session_state:
   st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
   st.session_state["user_info"] = None
 
 
+# ΕΛΕΓΧΟΣ ΓΙΑ AUTO-LOGIN ΑΠΟ URL PARAMETER (auto_phone)
+query_params = st.query_params
+if "auto_phone" in query_params and st.session_state["user_role"] is None:
+  auto_phone = (
+      str(query_params["auto_phone"])
+      .strip()
+      .replace("+357", "")
+      .replace(" ", "")
+      .replace("-", "")
+  )
+
+  conn = get_db_connection()
+  if conn:
+    cursor = conn.cursor()
+    query = """
+            SELECT ParentID, FirstName, LastName, Phone 
+            FROM Parents 
+            WHERE LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', ''))) = ? 
+              AND (IsActive = 1 OR IsActive IS NULL)
+        """
+    cursor.execute(query, (auto_phone,))
+    parent = cursor.fetchone()
+    conn.close()
+
+    if parent:
+      st.session_state["user_role"] = "Parent"
+      st.session_state["user_info"] = {
+          "id": parent[0],
+          "name": f"{parent[1]} {parent[2]}",
+          "phone": auto_phone,
+      }
+
+
 def logout():
   st.session_state["user_role"] = None
   st.session_state["user_info"] = None
+  # Καθαρισμός των URL parameters κατά την αποσύνδεση
+  st.query_params.clear()
   st.rerun()
 
 
@@ -279,7 +318,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                 st.error("❌ Αποτυχία αποστολής Push Notification.")
 
     st.markdown("---")
-    st.subheader("📜 Ιστορικό Απεσταλμένων Μηνυμάτων")
+    st.subheader("📜 Ιστορικό Απεσταλμένων Μηνύμάτων")
     conn = get_db_connection()
     if conn:
       query_history = """
