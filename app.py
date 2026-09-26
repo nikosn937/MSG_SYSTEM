@@ -90,44 +90,37 @@ def send_onesignal_notification(title, message_text, target_phones=None):
 
 # --- 4. SESSION STATE & AUTO-LOGIN VIA URL ---
 if "user_role" not in st.session_state:
-  st.session_state["user_role"] = None
+    st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
-  st.session_state["user_info"] = None
-
+    st.session_state["user_info"] = None
 
 # ΕΛΕΓΧΟΣ ΓΙΑ AUTO-LOGIN ΑΠΟ URL PARAMETER (auto_phone)
 query_params = st.query_params
 if "auto_phone" in query_params and st.session_state["user_role"] is None:
-  auto_phone = (
-      str(query_params["auto_phone"])
-      .strip()
-      .replace("+357", "")
-      .replace(" ", "")
-      .replace("-", "")
-  )
-
-  conn = get_db_connection()
-  if conn:
-    cursor = conn.cursor()
-    query = """
+    auto_phone = str(query_params["auto_phone"]).strip().replace("+357", "").replace(" ", "").replace("-", "")
+    
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        query = """
             SELECT ParentID, FirstName, LastName, Phone 
             FROM Parents 
             WHERE LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', ''))) = ? 
               AND (IsActive = 1 OR IsActive IS NULL)
         """
-    cursor.execute(query, (auto_phone,))
-    parent = cursor.fetchone()
-    conn.close()
-
-    if parent:
-      st.session_state["user_role"] = "Parent"
-      st.session_state["user_info"] = {
-          "id": parent[0],
-          "name": f"{parent[1]} {parent[2]}",
-          "phone": auto_phone,
-      }
-
-
+        cursor.execute(query, (auto_phone,))
+        parent = cursor.fetchone()
+        conn.close()
+        
+        if parent:
+            st.session_state["user_role"] = "Parent"
+            st.session_state["user_info"] = {
+                "id": parent[0],
+                "name": f"{parent[1]} {parent[2]}",
+                "phone": auto_phone
+            }
+            # ΔΙΟΡΘΩΣΗ: Κάνουμε rerun αμέσως για να παρακαμφθούν τα Tabs και το Login Form!
+            st.rerun()
 def logout():
   st.session_state["user_role"] = None
   st.session_state["user_info"] = None
