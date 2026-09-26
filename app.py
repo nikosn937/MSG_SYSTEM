@@ -468,7 +468,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             finally:
               conn.close()
 
-# --- 7. ΠΟΡТАΛ ΓΟΝΕΑ ---
+# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
   parent_id = st.session_state["user_info"]["id"]
   parent_name = st.session_state["user_info"]["name"]
@@ -516,12 +516,19 @@ elif st.session_state["user_role"] == "Parent":
     conn.close()
 
     if not df_msgs.empty:
-      for _, row in df_msgs.iterrows():
+      # Χρησιμοποιούμε enumerate για να ξέρουμε ποιο είναι το 1ο (πιο πρόσφατο) μήνυμα
+      for idx, row in df_msgs.iterrows():
         ann_id = row["AnnouncementID"]
         is_read = pd.notnull(row["ReadAt"])
         badge = "✅ Αναγνώστηκε" if is_read else "🔴 Νέο!"
 
-        with st.expander(f"📩 {row['Title']} ({row['CreatedAt']}) — {badge}"):
+        # Το πρώτο μήνυμα (idx == 0) ανοίγει αυτόματα (expanded=True)
+        is_latest = idx == 0
+
+        with st.expander(
+            f"📩 {row['Title']} ({row['CreatedAt']}) — {badge}",
+            expanded=is_latest,
+        ):
           st.write(row["Content"])
           st.caption(
               f"Αποστολέας: {row['SentBy']} | Τμήμα:"
