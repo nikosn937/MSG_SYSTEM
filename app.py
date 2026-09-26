@@ -497,6 +497,31 @@ elif st.session_state["user_role"] == "Parent":
 
   conn = get_db_connection()
   if conn:
+    # 1. ΑΥΤΟΜΑΤΗ ΣΗΜΑΝΣΗ ΟΛΩΝ ΤΩΝ ΝΕΩΝ ΜΗΝΥΜΑΤΩΝ ΩΣ ΑΝΑΓΝΩΣΜΕΝΑ
+    auto_read_query = """
+            INSERT INTO ReadReceipts (AnnouncementID, ParentID, ReadAt)
+            SELECT A.AnnouncementID, ?, GETDATE()
+            FROM Announcements A
+            WHERE (A.TargetAudience = 'ALL' 
+                   OR A.ClassID IN (
+                       SELECT S.ClassID 
+                       FROM Students S
+                       JOIN StudentParents SP ON S.StudentID = SP.StudentID
+                       WHERE SP.ParentID = ?
+                   ))
+              AND NOT EXISTS (
+                  SELECT 1 FROM ReadReceipts R 
+                  WHERE R.AnnouncementID = A.AnnouncementID AND R.ParentID = ?
+              )
+        """
+    try:
+      cur = conn.cursor()
+      cur.execute(auto_read_query, (parent_id, parent_id, parent_id))
+      conn.commit()
+    except Exception as ex:
+      pass  # Αν υπάρξει στιγμιαίο σφάλμα καταγραφής, συνεχίζουμε κανονικά στη προβολή
+
+    # 2. ΑΝΑΚΤΗΣΗ ΜΗΝΥΜΑΤΩΝ
     query_messages = """
             SELECT DISTINCT A.AnnouncementID, A.Title, A.Content, A.SentBy, A.CreatedAt, C.ClassName,
                    R.ReadAt
@@ -516,42 +541,17 @@ elif st.session_state["user_role"] == "Parent":
     conn.close()
 
     if not df_msgs.empty:
-      # Χρησιμοποιούμε enumerate για να ξέρουμε ποιο είναι το 1ο (πιο πρόσφατο) μήνυμα
       for idx, row in df_msgs.iterrows():
-        ann_id = row["AnnouncementID"]
-        is_read = pd.notnull(row["ReadAt"])
-        badge = "✅ Αναγνώστηκε" if is_read else "🔴 Νέο!"
-
-        # Το πρώτο μήνυμα (idx == 0) ανοίγει αυτόματα (expanded=True)
+        # Το πρώτο μήνυμα (idx == 0) ανοίγει αυτόματα
         is_latest = idx == 0
 
         with st.expander(
-            f"📩 {row['Title']} ({row['CreatedAt']}) — {badge}",
-            expanded=is_latest,
+            f"📩 {row['Title']} ({row['CreatedAt']})", expanded=is_latest
         ):
           st.write(row["Content"])
           st.caption(
               f"Αποστολέας: {row['SentBy']} | Τμήμα:"
               f" {row['ClassName'] if row['ClassName'] else 'Όλα'}"
           )
-
-          if not is_read:
-            if st.button("👁️ Σήμανση ως Αναγνωσμένο", key=f"read_{ann_id}"):
-              conn_receipt = get_db_connection()
-              if conn_receipt:
-                cur = conn_receipt.cursor()
-                try:
-                  cur.execute(
-                      "INSERT INTO ReadReceipts (AnnouncementID, ParentID,"
-                      " ReadAt) VALUES (?, ?, GETDATE())",
-                      (ann_id, parent_id),
-                  )
-                  conn_receipt.commit()
-                  st.success("Επιβεβαιώθηκε η ανάγνωση!")
-                  st.rerun()
-                except Exception as ex:
-                  st.error(f"Σφάλμα καταγραφής ανάγνωσης: {ex}")
-                finally:
-                  conn_receipt.close()
     else:
       st.info("Δεν υπάρχουν εισερχόμενα μηνύματα.")
