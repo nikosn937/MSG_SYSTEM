@@ -41,7 +41,7 @@ def get_db_connection():
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει Push Notification στους γονείς με αυτόματο σύνδεσμο Auto-Login στο URL."""
+  """Στέλνει εξατομικευμένο Push Notification ανά τηλέφωνο γονέα περιλαμβάνοντας το όνομα σχολείου στον τίτλο."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -49,71 +49,44 @@ def send_onesignal_notification(
     st.warning("⚠️ Λείπουν τα διαπιστευτήρια του OneSignal στα Secrets.")
     return False
 
-  if not target_phones or len(target_phones) == 0:
-    st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
-    return False
-
-  # Καθαρισμός όλων των τηλεφώνων (κράτημα μόνο των 8 ψηφίων)
-  clean_phones = []
-  for p in target_phones:
-    p_str = (
-        str(p)
-        .replace("+357", "")
-        .replace(" ", "")
-        .replace("-", "")
-        .strip()
-    )
-    if p_str:
-      clean_phones.append(p_str)
-
-  clean_phones = list(set(clean_phones))  # Αφαίρεση διπλότυπων
-
-  if not clean_phones:
-    st.warning("⚠️ Δεν υπάρχουν έγκυροι αριθμοί τηλεφώνου.")
-    return False
-
   headers = {
       "Content-Type": "application/json; charset=utf-8",
       "Authorization": f"Basic {rest_key}",
   }
 
+  base_url = "https://msgsys.streamlit.app"
+
   full_title = (
-      f"[{school_name}] {title}" if school_name.strip() else f"{title}"
+      f"[{school_name}] {title}" if school_name and school_name.strip() else f"{title}"
   )
-  base_app_url = "https://msgsys.streamlit.app"
 
-  # Αν η ειδοποίηση αφορά έναν συγκεκριμένο γονέα/μαθητή, βάζουμε απευθείας το auto_phone στο URL
-  if len(clean_phones) == 1:
-    target_url = f"{base_app_url}/?auto_phone={clean_phones[0]}"
+  if target_phones and len(target_phones) > 0:
+    success_count = 0
+    for phone in target_phones:
+      payload = {
+          "app_id": app_id,
+          "headings": {"el": full_title, "en": full_title},
+          "contents": {"el": message_text, "en": message_text},
+          "url": f"{base_url}/?auto_phone={phone}",
+          "include_aliases": {"external_id": [phone]},
+          "target_channel": "push",
+      }
+      try:
+        res = requests.post(
+            "https://onesignal.com/api/v1/notifications",
+            headers=headers,
+            json=payload,
+            timeout=5,
+        )
+        if res.status_code == 200:
+          success_count += 1
+      except Exception:
+        pass
+    return success_count > 0
   else:
-    # Αν στέλνουμε σε πολλούς (π.χ. σε όλη την τάξη/σχολείο),
-    # το OneSignal επιτρέπει να περάσουμε το external_id του παραλήπτη ως dynamic parameter
-    target_url = f"{base_app_url}/?auto_phone={{ external_id }}"
-
-  payload = {
-      "app_id": app_id,
-      "headings": {"el": full_title, "en": full_title},
-      "contents": {"el": message_text, "en": message_text},
-      "url": target_url,
-      "include_aliases": {"external_id": clean_phones},
-      "target_channel": "push",
-  }
-
-  try:
-    res = requests.post(
-        "https://onesignal.com/api/v1/notifications",
-        headers=headers,
-        json=payload,
-        timeout=10,
-    )
-    if res.status_code == 200:
-      return True
-    else:
-      st.error(f"❌ Σφάλμα OneSignal: {res.text}")
-      return False
-  except Exception as e:
-    st.error(f"❌ Σφάλμα κατά την αποστολή στο OneSignal: {e}")
+    st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
     return False
+
 
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
@@ -374,7 +347,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
     content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
 
-    # 4. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ & ΑΥΤΟΜΑТО PUSH NOTIFICATION
+    # 4. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ & ΑΥТОΜΑТО PUSH NOTIFICATION
     if st.button("🚀 Αποστολή Μηνύματος", use_container_width=True):
       if not title or not content:
         st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
@@ -446,8 +419,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 FROM Parents P
                                 JOIN StudentParents SP ON P.ParentID = SP.ParentID
                                 WHERE SP.StudentID IN ({placeholders})
-                                  AND P.Phone IS NOT NULL 
-                                  AND LTRIM(RTRIM(P.Phone)) <> ''
                             """
               cursor.execute(query_phones, selected_student_ids)
               target_phones = [r[0] for r in cursor.fetchall() if r[0]]
@@ -457,7 +428,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
           conn.close()
           st.success("✅ Το μήνυμα καταχωρήθηκε επιτυχώς στη βάση!")
 
-          # ΠΑΝΤΑ ΑΠΟΣТОΛΗ PUSH NOTIFICATION
+          # ΑΠΟΣТОΛΗ PUSH NOTIFICATION
           success = send_onesignal_notification(
               school_name, title, content, target_phones
           )
@@ -483,7 +454,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
       conn.close()
       st.dataframe(df_history, use_container_width=True)
 
-  # --- TAB 2: ΕΙΣΑΓΩΓΗ EXCEL (SMART SYNC) ---
+  # TAB 2: ΕΙΣΑΓΩΓΗ EXCEL (SMART SYNC)
   if st.session_state["user_role"] == "Admin":
     with admin_tab2:
       st.header("📊 Μαζική Εισαγωγή & Ενημέρωση Δεδομένων από Excel")
@@ -527,8 +498,8 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                   class_id = class_row[0]
                 else:
                   cursor.execute(
-                      "INSERT INTO Classes (ClassName, AcademicYear) VALUES"
-                      " (?, '2025-2026')",
+                      "INSERT INTO Classes (ClassName, AcademicYear) VALUES (?,"
+                      " '2025-2026')",
                       (class_name,),
                   )
                   cursor.execute("SELECT @@IDENTITY")
@@ -576,7 +547,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                     p_fn_str = str(p_fn).strip() if pd.notnull(p_fn) else ""
                     p_ln_str = str(p_ln).strip() if pd.notnull(p_ln) else ""
 
-                    # Καθαρισμός τηλεφώνου
                     clean_phone = (
                         str(int(raw_phone)).strip()
                         if str(raw_phone).replace(".0", "").isdigit()
@@ -589,7 +559,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                     )
 
                     if clean_phone and clean_phone.lower() != "nan":
-                      # Έλεγχος αν ο γονέας υπάρχει ήδη στη βάση (με βάση το τηλέφωνο ή το ονοματεπώνυμο)
                       cursor.execute(
                           """
                                               SELECT P.ParentID, P.Phone 
@@ -606,7 +575,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                             parent_match[0],
                             parent_match[1],
                         )
-                        # Αν άλλαξε το τηλέφωνο στο Excel, κάνουμε UPDATE
                         if current_phone != clean_phone:
                           cursor.execute(
                               """
@@ -618,7 +586,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                           )
                           updated_parents += 1
                       else:
-                        # Έλεγχος αν υπάρχει το τηλέφωνο γενικά στη βάση
                         cursor.execute(
                             "SELECT ParentID FROM Parents WHERE Phone = ?",
                             (clean_phone,),
@@ -628,7 +595,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                         if existing_phone_row:
                           parent_id = existing_phone_row[0]
                         else:
-                          # Νέος Γονέας
                           cursor.execute(
                               """
                                                       INSERT INTO Parents (FirstName, LastName, Phone, PasswordHash) 
@@ -645,7 +611,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                           parent_id = cursor.fetchone()[0]
                           new_parents += 1
 
-                        # Σύνδεση Μαθητή - Γονέα
                         cursor.execute(
                             """
                                                   IF NOT EXISTS (SELECT 1 FROM StudentParents WHERE StudentID=? AND ParentID=?)
