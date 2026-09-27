@@ -37,11 +37,11 @@ def get_db_connection():
     return None
 
 
-# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (BATCH REQUEST) ---
+# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει ΕΝΑ μαζικό Push Notification για όλα τα τηλέφωνα ταυτόχρονα."""
+  """Στέλνει Push Notifications γρήγορα στους παραλήπτες."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -62,12 +62,12 @@ def send_onesignal_notification(
   if target_phones and len(target_phones) > 0:
     unique_phones = list(set(target_phones))
 
-    # Αποστολή 1 HTTP Request με όλα τα τηλέφωνα στο include_aliases
+    # Αποστολή Push Request
     payload = {
         "app_id": app_id,
         "headings": {"el": full_title, "en": full_title},
         "contents": {"el": message_text, "en": message_text},
-        "url": f"{base_url}/?auto_phone={{ external_id }}",
+        "url": f"{base_url}/",
         "include_aliases": {"external_id": unique_phones},
         "target_channel": "push",
     }
@@ -116,7 +116,7 @@ def check_onesignal_registration(phone):
   return False
 
 
-# --- 4. SESSION STATE & AUTO-LOGIN VIA URL ---
+# --- 4. SESSION STATE & AUTO-LOGIN VIA URL (ΑΚΡΙΒΩΣ ΟΠΩΣ ΣΤΟ APP 11) ---
 if "user_role" not in st.session_state:
   st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
@@ -267,12 +267,9 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   with admin_tab1:
     st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
-    # 1. Πεδίο: Όνομα Σχολείου
     school_name = st.text_input(
         "Όνομα Σχολείου", placeholder="π.χ. 1ο Γυμνάσιο / Λύκειο..."
     )
-
-    # 2. Πεδίο: Θέμα / Τίτλος
     title = st.text_input(
         "Θέμα / Τίτλος Μηνύματος",
         placeholder="π.χ. Ενημέρωση για την Αυριανή Εκδρομή",
@@ -280,7 +277,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
     st.markdown("### 🎯 Επιλογή Παραληπτών")
 
-    # 3. ΔΗΜΙΟΥΡΓΙΑ ΙΕΡΑΡΧΙΚΟΥ ΔΕΝΤΡΟΥ ΠΑΡΑΛΗΠΤΩΝ (TREE VIEW)
     nodes = []
 
     conn = get_db_connection()
@@ -336,16 +332,13 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
         nodes.append(students_node)
 
-    # Προβολή του Tree Select Component
     return_select = tree_select(
         nodes, checked=[], expand_on_click=True, no_cascade=False
     )
-
     selected_values = return_select.get("checked", [])
 
     content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
 
-    # 4. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ & ΑΥΤΟΜΑΤΟ PUSH NOTIFICATION
     if st.button("🚀 Αποστολή Μηνύματος", use_container_width=True):
       if not title or not content:
         st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
@@ -426,15 +419,11 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
           conn.close()
           st.success("✅ Το μήνυμα καταχωρήθηκε επιτυχώς στη βάση!")
 
-          # ΠΑΝΤΑ ΑΠΟΣТОΛΗ PUSH NOTIFICATION (BATCH)
           success = send_onesignal_notification(
               school_name, title, content, target_phones
           )
           if success:
-            st.info(
-                "🔔 Η ειδοποίηση Push απεστάλη επιτυχώς στους γονείς μέσω"
-                " OneSignal!"
-            )
+            st.info("🔔 Η ειδοποίηση Push απεστάλη επιτυχώς στους γονείς!")
           else:
             st.error("❌ Αποτυχία αποστολής Push Notification.")
 
@@ -456,19 +445,12 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   if st.session_state["user_role"] == "Admin":
     with admin_tab2:
       st.header("📊 Μαζική Εισαγωγή & Ενημέρωση Δεδομένων από Excel")
-      st.caption(
-          "💡 **Smart Sync:** Οι νέοι μαθητές προστίθενται, ενώ για τους"
-          " υπάρχοντες ενημερώνονται τυχόν αλλαγές στα τηλέφωνα των γονέων χωρίς"
-          " να διαγράφεται το ιστορικό."
-      )
-
       uploaded_file = st.file_uploader(
           "Μεταφόρτωση Αρχείου Excel", type=["xlsx", "xls"]
       )
 
       if uploaded_file is not None:
         df = pd.read_excel(uploaded_file)
-        st.subheader("Προεπισκόπηση Δεδομένων")
         st.dataframe(df.head(), use_container_width=True)
 
         if st.button(
@@ -477,10 +459,12 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
           conn = get_db_connection()
           if conn:
             cursor = conn.cursor()
-            new_students = 0
-            existing_students = 0
-            updated_parents = 0
-            new_parents = 0
+            new_students, existing_students, updated_parents, new_parents = (
+                0,
+                0,
+                0,
+                0,
+            )
 
             try:
               for idx, row in df.iterrows():
@@ -488,7 +472,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                 student_fn = str(row["StudentFirstName"]).strip()
                 student_ln = str(row["StudentLastName"]).strip()
 
-                # 1. ΕΛΕΓΧΟΣ / ΕΙΣΑΓΩΓΗ ΤΜΗΜΑΤΟΣ (Classes)
                 cursor.execute(
                     "SELECT ClassID FROM Classes WHERE ClassName = ?",
                     (class_name,),
@@ -505,7 +488,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                   cursor.execute("SELECT @@IDENTITY")
                   class_id = cursor.fetchone()[0]
 
-                # 2. ΕΛΕΓΧΟΣ / ΕΙΣΑΓΩΓΗ ΜΑΘΗΤΗ (Students)
                 cursor.execute(
                     """
                                   SELECT StudentID FROM Students 
@@ -528,7 +510,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                   student_id = cursor.fetchone()[0]
                   new_students += 1
 
-                # 3. ΕΠΕΞΕΡΓΑΣΙΑ ΓΟΝΕΩΝ (Parent 1 & Parent 2)
                 parents_data = [
                     (
                         row.get("Parent1_FirstName"),
@@ -621,17 +602,9 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
               conn.commit()
               st.success("🎉 Ο συγχρονισμός ολοκληρώθηκε με επιτυχία!")
-              st.info(
-                  f"📋 **Αναφορά:**\n"
-                  f"* Νέοι Μαθητές: **{new_students}**\n"
-                  f"* Υπάρχοντες Μαθητές: **{existing_students}**\n"
-                  f"* Νέοι Γονείς: **{new_parents}**\n"
-                  f"* Ενημερωμένα Τηλέφωνα Γονέων: **{updated_parents}**"
-              )
-
             except Exception as e:
               conn.rollback()
-              st.error(f"❌ Σφάλμα κατά τον συγχρονισμό: {e}")
+              st.error(f"❌ Σφάλμα: {e}")
             finally:
               conn.close()
 
