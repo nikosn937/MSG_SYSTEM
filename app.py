@@ -287,12 +287,13 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
     conn = get_db_connection()
     if conn:
+      # Χρήση DISTINCT για αποφυγή διπλότυπων εγγραφών
       query_tree = """
-                SELECT S.StudentID, S.FirstName, S.LastName, C.ClassID, C.ClassName
-                FROM Students S
-                JOIN Classes C ON S.ClassID = C.ClassID
-                ORDER BY C.ClassName, S.LastName, S.FirstName
-            """
+            SELECT DISTINCT S.StudentID, S.FirstName, S.LastName, C.ClassID, C.ClassName
+            FROM Students S
+            JOIN Classes C ON S.ClassID = C.ClassID
+            ORDER BY C.ClassName, S.LastName, S.FirstName
+        """
       df_students = pd.read_sql(query_tree, conn)
       conn.close()
 
