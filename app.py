@@ -41,7 +41,7 @@ def get_db_connection():
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει Push Notifications γρήγορα στους παραλήπτες."""
+  """Στέλνει Push Notifications με εξατομικευμένο auto_phone URL για κάθε γονέα."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -61,31 +61,37 @@ def send_onesignal_notification(
 
   if target_phones and len(target_phones) > 0:
     unique_phones = list(set(target_phones))
+    success_count = 0
 
-    # Αποστολή Push Request
-    payload = {
-        "app_id": app_id,
-        "headings": {"el": full_title, "en": full_title},
-        "contents": {"el": message_text, "en": message_text},
-        "url": f"{base_url}/",
-        "include_aliases": {"external_id": unique_phones},
-        "target_channel": "push",
-    }
-    try:
-      res = requests.post(
-          "https://onesignal.com/api/v1/notifications",
-          headers=headers,
-          json=payload,
-          timeout=10,
+    # Στέλνουμε ξεχωριστό request για κάθε τηλέφωνο ώστε το URL να έχει το ΠΡΑΓΜΑΤΙΚΟ τηλέφωνο
+    for phone in unique_phones:
+      clean_phone = (
+          str(phone).strip().replace("+357", "").replace(" ", "").replace("-", "")
       )
-      return res.status_code == 200
-    except Exception:
-      return False
+      payload = {
+          "app_id": app_id,
+          "headings": {"el": full_title, "en": full_title},
+          "contents": {"el": message_text, "en": message_text},
+          "url": f"{base_url}/?auto_phone={clean_phone}",
+          "include_aliases": {"external_id": [clean_phone]},
+          "target_channel": "push",
+      }
+      try:
+        res = requests.post(
+            "https://onesignal.com/api/v1/notifications",
+            headers=headers,
+            json=payload,
+            timeout=5,
+        )
+        if res.status_code == 200:
+          success_count += 1
+      except Exception:
+        pass
+
+    return success_count > 0
   else:
     st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
     return False
-
-
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
   """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
