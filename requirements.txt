@@ -3,3 +3,4 @@ pyodbc
 pandas
 requests
 openpyxl
+streamlit-tree-select
