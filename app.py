@@ -37,7 +37,7 @@ def get_db_connection():
     return None
 
 
-# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (BATCH + DYNAMIC AUTO-PHONE) ---
+# --- 3. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (BATCH + DYNAMIC AUTO-PHONE) ---
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
@@ -68,9 +68,7 @@ def send_onesignal_notification(
   if target_phones and len(target_phones) > 0:
     unique_phones = list(set(target_phones))
 
-    # 🚀 Χρησιμοποιούμε το OneSignal Substitution tag {{ external_id }} στο URL!
-    # Αυτό επιτρέπει στη OneSignal να αντικαθιστά ΑΥΤΟΜΑΤΑ το τηλέφωνο του κάθε γονέα
-    # στο URL του Push Notification, ακόμα και σε 1 μαζικό (batch) request!
+    # Dynamic URL me Substitution Tag tis OneSignal
     dynamic_url = f"{base_url}/?auto_phone={{ external_id }}"
 
     payload = {
@@ -100,6 +98,8 @@ def send_onesignal_notification(
   else:
     st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
     return False
+
+
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
   """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
@@ -130,7 +130,7 @@ def check_onesignal_registration(phone):
   return False
 
 
-# --- 4. SESSION STATE & AUTO-LOGIN VIA URL ---
+# --- 4. SESSION STATE & AUTOMATIC DIRECT LOGIN VIA URL (AUTO-PHONE) ---
 if "user_role" not in st.session_state:
   st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
@@ -149,6 +149,7 @@ if "auto_phone" in query_params and st.session_state["user_role"] is None:
   conn = get_db_connection()
   if conn:
     cursor = conn.cursor()
+    # Apeutheias syndesi me to tilefono xwris elegcho password otan erchetai apo Push Notification
     query = """
             SELECT ParentID, FirstName, LastName, Phone 
             FROM Parents 
@@ -218,8 +219,16 @@ if st.session_state["user_role"] is None:
 
   with tab_parent:
     with st.form("parent_login_form"):
+      st.caption(
+          "💡 Αν συνδέεστε χειροκίνητα, εισάγετε το τηλέφωνό σας. Ο κωδικός"
+          " πρόσβασης είναι επίσης το τηλέφωνό σας."
+      )
       phone = st.text_input("Αριθμός Τηλεφώνου", placeholder="99XXXXXX")
-      password = st.text_input("Κωδικός Πρόσβασης", type="password")
+      password = st.text_input(
+          "Κωδικός Πρόσβασης",
+          type="password",
+          help="Εξ ορισμού είναι ο αριθμός του τηλεφώνου σας.",
+      )
       submit_parent = st.form_submit_button("Σύνδεση ως Γονέας")
 
       if submit_parent:
@@ -236,11 +245,15 @@ if st.session_state["user_role"] is None:
         conn = get_db_connection()
         if conn:
           cursor = conn.cursor()
+          # Elegchos eite me to password eite apeutheias me to phone an valei to idio
           query = """
                         SELECT ParentID, FirstName, LastName, Phone 
                         FROM Parents 
                         WHERE LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', ''))) = ? 
-                          AND LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(PasswordHash, '+357', ''), ' ', ''), '-', ''))) = ?
+                          AND (
+                            LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(PasswordHash, '+357', ''), ' ', ''), '-', ''))) = ?
+                            OR PasswordHash IS NULL OR PasswordHash = ''
+                          )
                           AND (IsActive = 1 OR IsActive IS NULL)
                     """
           cursor.execute(query, (clean_phone, clean_pass))
@@ -261,7 +274,7 @@ if st.session_state["user_role"] is None:
                 "❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία."
             )
 
-# --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
+# --- 6. ΠΟΡТАΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   st.sidebar.title("⚙️ Διαχείριση Αποστολών")
   st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
@@ -281,12 +294,9 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   with admin_tab1:
     st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
-    # 1. Πεδίο: Όνομα Σχολείου
     school_name = st.text_input(
         "Όνομα Σχολείου", placeholder="π.χ. 1ο Γυμνάσιο / Λύκειο..."
     )
-
-    # 2. Πεδίο: Θέμα / Τίτλος
     title = st.text_input(
         "Θέμα / Τίτλος Μηνύματος",
         placeholder="π.χ. Ενημέρωση για την Αυριανή Εκδρομή",
@@ -294,9 +304,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
     st.markdown("### 🎯 Επιλογή Παραληπτών")
 
-    # 3. ΔΗΜΙΟΥΡΓΙΑ ΙΕΡΑΡΧΙΚΟΥ ΔΕΝΤΡΟΥ ΠΑΡΑΛΗΠΤΩΝ (TREE VIEW)
     nodes = []
-
     conn = get_db_connection()
     if conn:
       query_tree = """
@@ -350,16 +358,13 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
         nodes.append(students_node)
 
-    # Προβολή του Tree Select Component
     return_select = tree_select(
         nodes, checked=[], expand_on_click=True, no_cascade=False
     )
-
     selected_values = return_select.get("checked", [])
 
     content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
 
-    # 4. ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΟΣ & ΑΥΤΟΜΑТО PUSH NOTIFICATION
     if st.button("🚀 Αποστολή Μηνύματος", use_container_width=True):
       if not title or not content:
         st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
@@ -440,7 +445,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
           conn.close()
           st.success("✅ Το μήνυμα καταχωρήθηκε επιτυχώς στη βάση!")
 
-          # ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION (BATCH)
           success = send_onesignal_notification(
               school_name, title, content, target_phones
           )
@@ -500,7 +504,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                 student_fn = str(row["StudentFirstName"]).strip()
                 student_ln = str(row["StudentLastName"]).strip()
 
-                # 1. ΕΛΕΓΧΟΣ / ΕΙΣΑΓΩΓΗ ΤΜΗΜΑΤΟΣ (Classes)
                 cursor.execute(
                     "SELECT ClassID FROM Classes WHERE ClassName = ?",
                     (class_name,),
@@ -517,7 +520,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                   cursor.execute("SELECT @@IDENTITY")
                   class_id = cursor.fetchone()[0]
 
-                # 2. ΕΛΕΓΧΟΣ / ΕΙΣΑΓΩΓΗ ΜΑΘΗΤΗ (Students)
                 cursor.execute(
                     """
                                   SELECT StudentID FROM Students 
@@ -540,7 +542,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                   student_id = cursor.fetchone()[0]
                   new_students += 1
 
-                # 3. ΕΠΕΞΕΡΓΑΣΙΑ ΓΟΝΕΩΝ (Parent 1 & Parent 2)
                 parents_data = [
                     (
                         row.get("Parent1_FirstName"),
@@ -647,7 +648,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             finally:
               conn.close()
 
-# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
+# --- 7. ΠΟΡТАΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
   parent_id = st.session_state["user_info"]["id"]
   parent_name = st.session_state["user_info"]["name"]
