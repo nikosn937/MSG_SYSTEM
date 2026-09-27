@@ -3,6 +3,7 @@ import pandas as pd
 import pyodbc
 import requests
 import streamlit as st
+from streamlit_tree_select import tree_select
 
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
@@ -40,10 +41,7 @@ def get_db_connection():
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει εξατομικευμένο Push Notification ανά τηλέφωνο γονέα
-
-  περιλαμβάνοντας το όνομα σχολείου στον τίτλο.
-  """
+  """Στέλνει εξατομικευμένο Push Notification ανά τηλέφωνο γονέα περιλαμβάνοντας το όνομα σχολείου στον τίτλο."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -58,7 +56,6 @@ def send_onesignal_notification(
 
   base_url = "https://msgsys.streamlit.app"
 
-  # Διαμόρφωση τίτλου με το όνομα σχολείου
   full_title = (
       f"[{school_name}] {title}" if school_name.strip() else f"{title}"
   )
@@ -272,26 +269,6 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   with admin_tab1:
     st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
-    # Ανάκτηση τμημάτων και μαθητών για τα φίλτρα
-    classes_dict = {}
-    students_list = []
-
-    conn = get_db_connection()
-    if conn:
-      cursor = conn.cursor()
-      cursor.execute("SELECT ClassID, ClassName FROM Classes ORDER BY ClassName")
-      for cid, cname in cursor.fetchall():
-        classes_dict[cname] = cid
-
-      cursor.execute("""
-                SELECT S.StudentID, S.FirstName, S.LastName, C.ClassName 
-                FROM Students S 
-                LEFT JOIN Classes C ON S.ClassID = C.ClassID 
-                ORDER BY C.ClassName, S.LastName, S.FirstName
-            """)
-      students_list = cursor.fetchall()
-      conn.close()
-
     # 1. Πεδίο: Όνομα Σχολείου
     school_name = st.text_input(
         "Όνομα Σχολείου", placeholder="π.χ. 1ο Γυμνάσιο / Λύκειο..."
@@ -303,76 +280,106 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
         placeholder="π.χ. Ενημέρωση για την Αυριανή Εκδρομή",
     )
 
-    # 🎯 3. Επιλογή Τύπου Παραληπτών
-    recipient_type = st.radio(
-        "🎯 Επιλογή Παραληπτών:",
-        [
-            "🌐 Όλο το Σχολείο (ALL)",
-            "🎓 Ανά Τάξη (π.χ. Α' Τάξη)",
-            "🏫 Ανά Τμήμα (π.χ. Α1)",
-            "👤 Συγκεκριμένοι Μαθητές",
-        ],
-        horizontal=True,
+    st.markdown("### 🎯 Επιλογή Παραληπτών")
+
+    # 3. ΔΗΜΙΟΥΡΓΙΑ ΙΕΡΑΡΧΙΚΟΥ ΔΕΝΤΡΟΥ ΠΑΡΑΛΗΠΤΩΝ (TREE VIEW)
+    nodes = []
+
+    conn = get_db_connection()
+    if conn:
+      query_tree = """
+                SELECT S.StudentID, S.FirstName, S.LastName, C.ClassID, C.ClassName
+                FROM Students S
+                JOIN Classes C ON S.ClassID = C.ClassID
+                ORDER BY C.ClassName, S.LastName, S.FirstName
+            """
+      df_students = pd.read_sql(query_tree, conn)
+      conn.close()
+
+      if not df_students.empty:
+        df_students["Grade"] = df_students["ClassName"].apply(
+            lambda x: str(x)[0].upper() if x else "Άλλο"
+        )
+
+        students_node = {
+            "label": "🎓 Μαθητές (Όλοι)",
+            "value": "ALL_STUDENTS",
+            "children": [],
+        }
+
+        for grade, group_grade in df_students.groupby("Grade"):
+          grade_node = {
+              "label": f"Τάξη {grade}",
+              "value": f"GRADE_{grade}",
+              "children": [],
+          }
+
+          for class_name, group_class in group_grade.groupby("ClassName"):
+            class_id = group_class["ClassID"].iloc[0]
+            class_node = {
+                "label": f"Τμήμα {class_name}",
+                "value": f"CLASS_{class_id}",
+                "children": [],
+            }
+
+            for _, row in group_class.iterrows():
+              student_node = {
+                  "label": (
+                      f"{row['StudentID']} - {row['LastName']}"
+                      f" {row['FirstName']}"
+                  ),
+                  "value": f"STUDENT_{row['StudentID']}",
+              }
+              class_node["children"].append(student_node)
+
+            grade_node["children"].append(class_node)
+
+          students_node["children"].append(grade_node)
+
+        nodes.append(students_node)
+
+    # Προβολή του Tree Select Component
+    return_select = tree_select(
+        nodes,
+        checked=[],
+        expand_on_click=True,
+        show_outer_level_checkboxes=True,
+        no_cascade=False,
     )
 
-    selected_class_id = None
-    selected_grade_prefix = None
-    selected_student_ids = []
-
-    if recipient_type == "🎓 Ανά Τάξη (π.χ. Α' Τάξη)":
-      selected_grade_prefix = st.selectbox(
-          "Επιλέξτε Τάξη:",
-          ["Α", "Β", "Γ", "Δ", "Ε", "ΣΤ"],
-          format_func=lambda x: f"Τάξη {x}",
-      )
-    elif recipient_type == "🏫 Ανά Τμήμα (π.χ. Α1)":
-      selected_class_name = st.selectbox(
-          "Επιλέξτε Τμήμα:", list(classes_dict.keys())
-      )
-      selected_class_id = classes_dict.get(selected_class_name)
-    elif recipient_type == "👤 Συγκεκριμένοι Μαθητές":
-      student_options = {
-          f"{s[3]} - {s[2]} {s[1]} (ID: {s[0]})": s[0] for s in students_list
-      }
-      selected_student_names = st.multiselect(
-          "Επιλέξτε Μαθητή/ές:", list(student_options.keys())
-      )
-      selected_student_ids = [
-          student_options[name] for name in selected_student_names
-      ]
+    selected_values = return_select.get("checked", [])
 
     content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
-    send_push = st.checkbox(
-        "🔔 Αποστολή και ως Push Notification (OneSignal)", value=True
-    )
 
+    # 4. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ & ΑΥΤΟΜΑΤΟ PUSH NOTIFICATION
     if st.button("🚀 Αποστολή Μηνύματος", use_container_width=True):
       if not title or not content:
         st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
-      elif (
-          recipient_type == "👤 Συγκεκριμένοι Μαθητές"
-          and not selected_student_ids
-      ):
-        st.warning("Παρακαλώ επιλέξτε τουλάχιστον έναν μαθητή.")
+      elif not selected_values:
+        st.warning(
+            "Παρακαλώ επιλέξτε τουλάχιστον έναν παραλήπτη από το δέντρο."
+        )
       else:
-        # Υπολογισμός TargetAudience & ClassID για τη Βάση
-        if recipient_type == "🌐 Όλο το Σχολείο (ALL)":
+        selected_student_ids = []
+
+        if "ALL_STUDENTS" in selected_values:
           target_audience = "ALL"
           db_class_id = None
-        elif recipient_type == "🎓 Ανά Τάξη (π.χ. Α' Τάξη)":
-          target_audience = f"GRADE_{selected_grade_prefix}"
-          db_class_id = None
-        elif recipient_type == "🏫 Ανά Τμήμα (π.χ. Α1)":
-          target_audience = "CLASS"
-          db_class_id = selected_class_id
         else:
           target_audience = "STUDENTS"
           db_class_id = None
 
+          for val in selected_values:
+            if str(val).startswith("STUDENT_"):
+              st_id = int(str(val).replace("STUDENT_", ""))
+              selected_student_ids.append(st_id)
+
+        selected_student_ids = list(set(selected_student_ids))
+
         conn = get_db_connection()
         if conn:
           cursor = conn.cursor()
-          # 1. Αποθήκευση Ανακοίνωσης
+
           insert_query = """
                         INSERT INTO Announcements (Title, Content, TargetAudience, ClassID, SentBy, CreatedAt)
                         VALUES (?, ?, ?, ?, ?, GETDATE());
@@ -389,11 +396,9 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
           )
           conn.commit()
 
-          # Ανάκτηση ID της νέας ανακοίνωσης
           cursor.execute("SELECT @@IDENTITY")
           announcement_id = cursor.fetchone()[0]
 
-          # 2. Εύρεση τηλεφώνων γονέων ανάλογα με την επιλογή
           target_phones = []
 
           if target_audience == "ALL":
@@ -403,65 +408,41 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                         """
             cursor.execute(query_phones)
             target_phones = [r[0] for r in cursor.fetchall() if r[0]]
-
-          elif target_audience.startswith("GRADE_"):
-            prefix = selected_grade_prefix + "%"
-            query_phones = """
-                            SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
-                            FROM Parents P
-                            JOIN StudentParents SP ON P.ParentID = SP.ParentID
-                            JOIN Students S ON SP.StudentID = S.StudentID
-                            JOIN Classes C ON S.ClassID = C.ClassID
-                            WHERE C.ClassName LIKE ?
-                        """
-            cursor.execute(query_phones, (prefix,))
-            target_phones = [r[0] for r in cursor.fetchall() if r[0]]
-
-          elif target_audience == "CLASS":
-            query_phones = """
-                            SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
-                            FROM Parents P
-                            JOIN StudentParents SP ON P.ParentID = SP.ParentID
-                            JOIN Students S ON SP.StudentID = S.StudentID
-                            WHERE S.ClassID = ?
-                        """
-            cursor.execute(query_phones, (db_class_id,))
-            target_phones = [r[0] for r in cursor.fetchall() if r[0]]
-
-          elif target_audience == "STUDENTS":
+          else:
             for st_id in selected_student_ids:
               cursor.execute(
-                  "INSERT INTO AnnouncementStudents (AnnouncementID, StudentID)"
-                  " VALUES (?, ?)",
+                  "INSERT INTO AnnouncementStudents (AnnouncementID,"
+                  " StudentID) VALUES (?, ?)",
                   (announcement_id, st_id),
               )
 
-            placeholders = ",".join(["?"] * len(selected_student_ids))
-            query_phones = f"""
-                            SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
-                            FROM Parents P
-                            JOIN StudentParents SP ON P.ParentID = SP.ParentID
-                            WHERE SP.StudentID IN ({placeholders})
-                        """
-            cursor.execute(query_phones, selected_student_ids)
-            target_phones = [r[0] for r in cursor.fetchall() if r[0]]
+            if selected_student_ids:
+              placeholders = ",".join(["?"] * len(selected_student_ids))
+              query_phones = f"""
+                                SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', '')))
+                                FROM Parents P
+                                JOIN StudentParents SP ON P.ParentID = SP.ParentID
+                                WHERE SP.StudentID IN ({placeholders})
+                            """
+              cursor.execute(query_phones, selected_student_ids)
+              target_phones = [r[0] for r in cursor.fetchall() if r[0]]
 
             conn.commit()
 
           conn.close()
           st.success("✅ Το μήνυμα καταχωρήθηκε επιτυχώς στη βάση!")
 
-          if send_push:
-            success = send_onesignal_notification(
-                school_name, title, content, target_phones
+          # ΠΑΝΤΑ ΑΠΟΣТОΛΗ PUSH NOTIFICATION
+          success = send_onesignal_notification(
+              school_name, title, content, target_phones
+          )
+          if success:
+            st.info(
+                "🔔 Η ειδοποίηση Push απεστάλη επιτυχώς στους γονείς μέσω"
+                " OneSignal!"
             )
-            if success:
-              st.info(
-                  "🔔 Η ειδοποίηση Push απεστάλη επιτυχώς στους γονείς μέσω"
-                  " OneSignal!"
-              )
-            else:
-              st.error("❌ Αποτυχία αποστολής Push Notification.")
+          else:
+            st.error("❌ Αποτυχία αποστολής Push Notification.")
 
     st.markdown("---")
     st.subheader("📜 Ιστορικό Απεσταλμένων Μηνύμάτων")
@@ -644,12 +625,10 @@ elif st.session_state["user_role"] == "Parent":
   if st.sidebar.button("🚪 Αποσύνδεση"):
     logout()
 
-  # --- ΚΥΡΙΩΣ ΟΘΟΝΗ: ΕΙΣΕΡΧΟΜΕΝΑ ΜΗΝΥΜΑΤΑ ---
   st.header("📥 Εισερχόμενα Μηνύματα")
 
   conn = get_db_connection()
   if conn:
-    # 1. ΑΥΤΟΜΑΤΗ ΣΗΜΑΝΣΗ ΟΛΩΝ ΤΩΝ ΝΕΩΝ ΜΗΝΥΜΑΤΩΝ ΩΣ ΑΝΑΓΝΩΣΜΕΝΑ
     auto_read_query = """
             INSERT INTO ReadReceipts (AnnouncementID, ParentID, ReadAt)
             SELECT A.AnnouncementID, ?, GETDATE()
@@ -683,7 +662,6 @@ elif st.session_state["user_role"] == "Parent":
     except Exception:
       pass
 
-    # 2. ΑΝΑΚΤΗΣΗ ΜΗΝΥΜΑΤΩΝ ΠΟΥ ΑΦΟΡΟΥΝ ΤΟΝ ΓΟΝΕΑ
     query_messages = """
             SELECT DISTINCT A.AnnouncementID, A.Title, A.Content, A.SentBy, A.CreatedAt, C.ClassName, R.ReadAt
             FROM Announcements A
