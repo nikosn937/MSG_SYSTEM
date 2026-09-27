@@ -37,11 +37,11 @@ def get_db_connection():
     return None
 
 
-# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (BATCH SENDING) ---
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει εξατομικευμένο Push Notification ανά τηλέφωνο γονέα περιλαμβάνοντας το όνομα σχολείου στον τίτλο."""
+  """Στέλνει μαζικά (Batch) Push Notification σε όλους τους στοχευμένους γονείς σε 1 μόνο HTTP Request."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -57,32 +57,44 @@ def send_onesignal_notification(
   base_url = "https://msgsys.streamlit.app"
 
   full_title = (
-      f"[{school_name}] {title}" if school_name and school_name.strip() else f"{title}"
+      f"[{school_name}] {title}"
+      if school_name and school_name.strip()
+      else f"{title}"
   )
 
   if target_phones and len(target_phones) > 0:
-    success_count = 0
-    for phone in target_phones:
-      payload = {
-          "app_id": app_id,
-          "headings": {"el": full_title, "en": full_title},
-          "contents": {"el": message_text, "en": message_text},
-          "url": f"{base_url}/?auto_phone={phone}",
-          "include_aliases": {"external_id": [phone]},
-          "target_channel": "push",
-      }
-      try:
-        res = requests.post(
-            "https://onesignal.com/api/v1/notifications",
-            headers=headers,
-            json=payload,
-            timeout=5,
-        )
-        if res.status_code == 200:
-          success_count += 1
-      except Exception:
-        pass
-    return success_count > 0
+    unique_phones = list(set(target_phones))
+
+    redirect_url = (
+        f"{base_url}/?auto_phone={unique_phones[0]}"
+        if len(unique_phones) == 1
+        else base_url
+    )
+
+    payload = {
+        "app_id": app_id,
+        "headings": {"el": full_title, "en": full_title},
+        "contents": {"el": message_text, "en": message_text},
+        "url": redirect_url,
+        "include_aliases": {"external_id": unique_phones},
+        "target_channel": "push",
+    }
+
+    try:
+      res = requests.post(
+          "https://onesignal.com/api/v1/notifications",
+          headers=headers,
+          json=payload,
+          timeout=10,
+      )
+      if res.status_code == 200:
+        return True
+      else:
+        st.error(f"❌ Σφάλμα OneSignal API: {res.status_code} - {res.text}")
+        return False
+    except Exception as e:
+      st.error(f"❌ Αποτυχία σύνδεσης με OneSignal: {e}")
+      return False
   else:
     st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
     return False
@@ -249,7 +261,7 @@ if st.session_state["user_role"] is None:
                 "❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία."
             )
 
-# --- 6. ΠΟΡΤΑΛ ΑΠΟΣТОΛΕΑ (ADMIN / TEACHER) ---
+# --- 6. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   st.sidebar.title("⚙️ Διαχείριση Αποστολών")
   st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
@@ -265,7 +277,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   else:
     admin_tab1 = st.container()
 
-  # TAB 1: ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΩΝ
+  # TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ
   with admin_tab1:
     st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
@@ -347,7 +359,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
     content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
 
-    # 4. ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΟΣ & ΑΥТОΜΑТО PUSH NOTIFICATION
+    # 4. ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΟΣ & ΑΥΤΟΜΑТО PUSH NOTIFICATION
     if st.button("🚀 Αποστολή Μηνύματος", use_container_width=True):
       if not title or not content:
         st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
@@ -428,7 +440,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
           conn.close()
           st.success("✅ Το μήνυμα καταχωρήθηκε επιτυχώς στη βάση!")
 
-          # ΑΠΟΣТОΛΗ PUSH NOTIFICATION
+          # ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION (BATCH)
           success = send_onesignal_notification(
               school_name, title, content, target_phones
           )
