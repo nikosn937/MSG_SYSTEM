@@ -37,11 +37,14 @@ def get_db_connection():
     return None
 
 
-# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (BATCH SENDING) ---
+# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (BATCH + DYNAMIC AUTO-PHONE) ---
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει μαζικά (Batch) Push Notification σε όλους τους στοχευμένους γονείς σε 1 μόνο HTTP Request."""
+  """Στέλνει μαζικά (Batch) Push Notification σε όλους τους στοχευμένους γονείς σε 1 αίτημα,
+
+  διατηρώντας το αυτόματο Login (auto_phone) για τον καθένα ξεχωριστά.
+  """
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -65,17 +68,16 @@ def send_onesignal_notification(
   if target_phones and len(target_phones) > 0:
     unique_phones = list(set(target_phones))
 
-    redirect_url = (
-        f"{base_url}/?auto_phone={unique_phones[0]}"
-        if len(unique_phones) == 1
-        else base_url
-    )
+    # 🚀 Χρησιμοποιούμε το OneSignal Substitution tag {{ external_id }} στο URL!
+    # Αυτό επιτρέπει στη OneSignal να αντικαθιστά ΑΥΤΟΜΑΤΑ το τηλέφωνο του κάθε γονέα
+    # στο URL του Push Notification, ακόμα και σε 1 μαζικό (batch) request!
+    dynamic_url = f"{base_url}/?auto_phone={{ external_id }}"
 
     payload = {
         "app_id": app_id,
         "headings": {"el": full_title, "en": full_title},
         "contents": {"el": message_text, "en": message_text},
-        "url": redirect_url,
+        "url": dynamic_url,
         "include_aliases": {"external_id": unique_phones},
         "target_channel": "push",
     }
@@ -98,8 +100,6 @@ def send_onesignal_notification(
   else:
     st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
     return False
-
-
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
   """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
