@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 import pandas as pd
 import pyodbc
@@ -35,19 +36,51 @@ def get_db_connection():
   except Exception as e:
     st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
     return None
-from concurrent.futures import ThreadPoolExecutor
 
 
-# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+# --- 3. ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
+def check_onesignal_registration(phone):
+  """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
+  app_id = st.secrets.get("ONESIGNAL_APP_ID")
+  rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
+
+  if not app_id or not rest_key or not phone:
+    return False
+
+  headers = {
+      "Content-Type": "application/json; charset=utf-8",
+      "Authorization": f"Basic {rest_key}",
+  }
+
+  try:
+    clean_phone = (
+        str(phone).strip().replace("+357", "").replace(" ", "").replace("-", "")
+    )
+    url = f"https://onesignal.com/api/v1/apps/{app_id}/users/by/external_id/{clean_phone}"
+    res = requests.get(url, headers=headers, timeout=3)
+    if res.status_code == 200:
+      data = res.json()
+      subscriptions = data.get("subscriptions", [])
+
+      for sub in subscriptions:
+        if sub.get("enabled", False) is True and not sub.get("opted_out", False):
+          return True
+  except Exception:
+    pass
+
+  return False
+
+
+# --- 4. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (PARALLEL) ---
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Stelnei Push Notifications TAFTOXRONA (Parallel) me auto_phone URL gia kathe gonea."""
+  """Στέλνει Push Notifications παράλληλα για ταχύτητα και 100% λειτουργικό auto-login."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
   if not app_id or not rest_key:
-    st.warning("⚠️ Leipoun ta diapisteftiria tou OneSignal sta Secrets.")
+    st.warning("⚠️ Λείπουν τα διαπιστευτήρια του OneSignal στα Secrets.")
     return False
 
   headers = {
@@ -89,16 +122,16 @@ def send_onesignal_notification(
       except Exception:
         return False
 
-    # Εκτέλεση έως και 20 requests ταυτόχρονα (Parallel Workers)
     with ThreadPoolExecutor(max_workers=20) as executor:
       results = list(executor.map(send_single_push, unique_phones))
 
     return any(results)
   else:
-    st.warning("⚠️ Den vreθηκαν tilefona paralimpton gia tin apostoli Push.")
+    st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
     return False
 
-# --- 4. SESSION STATE & AUTO-LOGIN VIA URL (ΑΚΡΙΒΩΣ ΟΠΩΣ ΣΤΟ APP 11) ---
+
+# --- 5. SESSION STATE & AUTO-LOGIN VIA URL ---
 if "user_role" not in st.session_state:
   st.session_state["user_role"] = None
 if "user_info" not in st.session_state:
@@ -144,7 +177,7 @@ def logout():
   st.rerun()
 
 
-# --- 5. ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LOGIN) ---
+# --- 6. ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LOGIN) ---
 if st.session_state["user_role"] is None:
   st.title("💬 Portal Μηνυμάτων Σχολείου")
   st.subheader("Σύνδεση στο Σύστημα")
@@ -229,7 +262,7 @@ if st.session_state["user_role"] is None:
                 "❌ Δεν βρέθηκε ενεργός λογαριασμός γονέα με αυτά τα στοιχεία."
             )
 
-# --- 6. ΠΟΡΤΑΛ ΑΠΟΣТОΛΕΑ (ADMIN / TEACHER) ---
+# --- 7. ΠΟΡΤΑΛ ΑΠΟΣΤΟΛΕΑ (ADMIN / TEACHER) ---
 elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   st.sidebar.title("⚙️ Διαχείριση Αποστολών")
   st.sidebar.write(f"👤 Σύνδεση: **{st.session_state['user_info']['name']}**")
@@ -245,7 +278,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
   else:
     admin_tab1 = st.container()
 
-  # TAB 1: ΑΠΟΣТОΛΗ ΜΗΝΥΜΑΤΩΝ
+  # TAB 1: ΑΠΟΣΤΟΛΗ ΜΗΝΥΜΑΤΩΝ
   with admin_tab1:
     st.header("📤 Σύνταξη & Αποστολή Νέου Μηνύματος")
 
@@ -590,7 +623,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             finally:
               conn.close()
 
-# --- 7. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
+# --- 8. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
 elif st.session_state["user_role"] == "Parent":
   parent_id = st.session_state["user_info"]["id"]
   parent_name = st.session_state["user_info"]["name"]
