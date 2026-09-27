@@ -35,7 +35,7 @@ def get_db_connection():
     return None
 
 
-# --- 3. ΑΠΟΣТОΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
+# --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL ---
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
@@ -61,7 +61,7 @@ def send_onesignal_notification(
   if target_phones and len(target_phones) > 0:
     unique_phones = list(set(target_phones))
 
-    # Dynamic URL gia kathe gonea mazi me auto_phone parameter
+    # Δυναμικό URL για κάθε γονέα
     dynamic_url = f"{base_url}/?auto_phone={{ external_id }}"
 
     payload = {
@@ -120,23 +120,22 @@ if "user_info" not in st.session_state:
 
 query_params = st.query_params
 
-# ΕΛΕΓΧΟΣ AUTO-LOGIN ΑΠΟ LINK NOTIFICATION
+# ΑΥΤΟΜΑΤΗ ΣΥΝΔΕΣΗ ΓΟΝΕΑ ΑΠΟ ΤΟ LINK
 if "auto_phone" in query_params and st.session_state["user_role"] is None:
-  raw_phone = str(query_params["auto_phone"]).strip()
-  # Krataei mono ta teleutaia 8 psifia gia na kanei match panta (p.x. 99123456)
-  clean_phone = "".join(filter(str.isdigit, raw_phone))[-8:]
+  phone_param = str(query_params["auto_phone"]).strip()
+  digits_only = "".join(filter(str.isdigit, phone_param))[-8:]
 
-  if clean_phone:
+  if digits_only:
     conn = get_db_connection()
     if conn:
       cursor = conn.cursor()
-      # Anazitisi sti vasi gia antistoichisi me ta teleytaia 8 psifia
+      # Αναζήτηση στη βάση μόνο με τα 8 ψηφία του τηλεφώνου
       query = """
                 SELECT ParentID, FirstName, LastName, Phone 
                 FROM Parents 
                 WHERE Phone LIKE ? AND (IsActive = 1 OR IsActive IS NULL)
             """
-      cursor.execute(query, (f"%{clean_phone}",))
+      cursor.execute(query, (f"%{digits_only}",))
       parent = cursor.fetchone()
       conn.close()
 
@@ -157,12 +156,9 @@ def logout():
   st.rerun()
 
 
-# --- 5. ΟΘΟΝΗ ΣΥΝΔΕΣΗ (LOGIN) ---
+# --- 5. ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LOGIN) ---
 if st.session_state["user_role"] is None:
   st.title("💬 Portal Μηνυμάτων Σχολείου")
-
-  # Prosochi: Orizoume default tab analoga me to an irthe me auto_phone i oxi
-  default_tab = 1 if "auto_phone" in query_params else 0
 
   tab_admin, tab_parent = st.tabs(
       ["👨‍🏫 Αποστολέας / Εκπαιδευτικός", "👨‍👩‍👧 Γονέας / Κηδεμόνας"]
@@ -210,7 +206,7 @@ if st.session_state["user_role"] is None:
       submit_parent = st.form_submit_button("Σύνδεση ως Γονέας")
 
       if submit_parent:
-        clean_phone = "".join(filter(str.isdigit, phone_input))[-8:]
+        digits_only = "".join(filter(str.isdigit, phone_input))[-8:]
         conn = get_db_connection()
         if conn:
           cursor = conn.cursor()
@@ -219,7 +215,7 @@ if st.session_state["user_role"] is None:
                         FROM Parents 
                         WHERE Phone LIKE ? AND (IsActive = 1 OR IsActive IS NULL)
                     """
-          cursor.execute(query, (f"%{clean_phone}",))
+          cursor.execute(query, (f"%{digits_only}",))
           parent = cursor.fetchone()
           conn.close()
 
