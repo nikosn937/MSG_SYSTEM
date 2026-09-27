@@ -35,18 +35,19 @@ def get_db_connection():
   except Exception as e:
     st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
     return None
+from concurrent.futures import ThreadPoolExecutor
 
 
 # --- 3. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API ---
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει Push Notifications με εξατομικευμένο auto_phone URL για κάθε γονέα."""
+  """Stelnei Push Notifications TAFTOXRONA (Parallel) me auto_phone URL gia kathe gonea."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
   if not app_id or not rest_key:
-    st.warning("⚠️ Λείπουν τα διαπιστευτήρια του OneSignal στα Secrets.")
+    st.warning("⚠️ Leipoun ta diapisteftiria tou OneSignal sta Secrets.")
     return False
 
   headers = {
@@ -60,20 +61,21 @@ def send_onesignal_notification(
   )
 
   if target_phones and len(target_phones) > 0:
-    unique_phones = list(set(target_phones))
-    success_count = 0
+    unique_phones = list(
+        set(
+            str(p).strip().replace("+357", "").replace(" ", "").replace("-", "")
+            for p in target_phones
+            if p
+        )
+    )
 
-    # Στέλνουμε ξεχωριστό request για κάθε τηλέφωνο ώστε το URL να έχει το ΠΡΑΓΜΑΤΙΚΟ τηλέφωνο
-    for phone in unique_phones:
-      clean_phone = (
-          str(phone).strip().replace("+357", "").replace(" ", "").replace("-", "")
-      )
+    def send_single_push(phone):
       payload = {
           "app_id": app_id,
           "headings": {"el": full_title, "en": full_title},
           "contents": {"el": message_text, "en": message_text},
-          "url": f"{base_url}/?auto_phone={clean_phone}",
-          "include_aliases": {"external_id": [clean_phone]},
+          "url": f"{base_url}/?auto_phone={phone}",
+          "include_aliases": {"external_id": [phone]},
           "target_channel": "push",
       }
       try:
@@ -83,44 +85,18 @@ def send_onesignal_notification(
             json=payload,
             timeout=5,
         )
-        if res.status_code == 200:
-          success_count += 1
+        return res.status_code == 200
       except Exception:
-        pass
+        return False
 
-    return success_count > 0
+    # Εκτέλεση έως και 20 requests ταυτόχρονα (Parallel Workers)
+    with ThreadPoolExecutor(max_workers=20) as executor:
+      results = list(executor.map(send_single_push, unique_phones))
+
+    return any(results)
   else:
-    st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
+    st.warning("⚠️ Den vreθηκαν tilefona paralimpton gia tin apostoli Push.")
     return False
-# --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
-def check_onesignal_registration(phone):
-  """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
-  app_id = st.secrets.get("ONESIGNAL_APP_ID")
-  rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
-
-  if not app_id or not rest_key or not phone:
-    return False
-
-  headers = {
-      "Content-Type": "application/json; charset=utf-8",
-      "Authorization": f"Basic {rest_key}",
-  }
-
-  try:
-    url = f"https://onesignal.com/api/v1/apps/{app_id}/users/by/external_id/{phone}"
-    res = requests.get(url, headers=headers, timeout=3)
-    if res.status_code == 200:
-      data = res.json()
-      subscriptions = data.get("subscriptions", [])
-
-      for sub in subscriptions:
-        if sub.get("enabled", False) is True and not sub.get("opted_out", False):
-          return True
-  except Exception:
-    pass
-
-  return False
-
 
 # --- 4. SESSION STATE & AUTO-LOGIN VIA URL (ΑΚΡΙΒΩΣ ΟΠΩΣ ΣΤΟ APP 11) ---
 if "user_role" not in st.session_state:
