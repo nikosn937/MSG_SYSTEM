@@ -41,7 +41,7 @@ def get_db_connection():
 def send_onesignal_notification(
     school_name, title, message_text, target_phones=None
 ):
-  """Στέλνει εξατομικευμένο Push Notification σε όλα τα καθαρισμένα τηλέφωνα γονέων ταυτόχρονα."""
+  """Στέλνει Push Notification στους γονείς με αυτόματο σύνδεσμο Auto-Login στο URL."""
   app_id = st.secrets.get("ONESIGNAL_APP_ID")
   rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
@@ -80,12 +80,21 @@ def send_onesignal_notification(
   full_title = (
       f"[{school_name}] {title}" if school_name.strip() else f"{title}"
   )
+  base_app_url = "https://msgsys.streamlit.app"
+
+  # Αν η ειδοποίηση αφορά έναν συγκεκριμένο γονέα/μαθητή, βάζουμε απευθείας το auto_phone στο URL
+  if len(clean_phones) == 1:
+    target_url = f"{base_app_url}/?auto_phone={clean_phones[0]}"
+  else:
+    # Αν στέλνουμε σε πολλούς (π.χ. σε όλη την τάξη/σχολείο),
+    # το OneSignal επιτρέπει να περάσουμε το external_id του παραλήπτη ως dynamic parameter
+    target_url = f"{base_app_url}/?auto_phone={{ external_id }}"
 
   payload = {
       "app_id": app_id,
       "headings": {"el": full_title, "en": full_title},
       "contents": {"el": message_text, "en": message_text},
-      "url": "https://msgsys.streamlit.app",
+      "url": target_url,
       "include_aliases": {"external_id": clean_phones},
       "target_channel": "push",
   }
@@ -105,7 +114,6 @@ def send_onesignal_notification(
   except Exception as e:
     st.error(f"❌ Σφάλμα κατά την αποστολή στο OneSignal: {e}")
     return False
-
 
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
