@@ -340,11 +340,7 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
     # Προβολή του Tree Select Component
     return_select = tree_select(
-        nodes,
-        checked=[],
-        expand_on_click=True,
-        show_outer_level_checkboxes=True,
-        no_cascade=False,
+        nodes, checked=[], expand_on_click=True, no_cascade=False
     )
 
     selected_values = return_select.get("checked", [])
