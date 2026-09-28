@@ -3,6 +3,7 @@ import urllib.parse
 import pandas as pd
 import pyodbc
 import requests
+import time
 import streamlit as st
 from streamlit_tree_select import tree_select
 
@@ -102,25 +103,27 @@ def send_onesignal_notification(
         )
     )
 
-    def send_single_push(phone):
-      payload = {
-          "app_id": app_id,
-          "headings": {"el": full_title, "en": full_title},
-          "contents": {"el": message_text, "en": message_text},
-          "url": f"{base_url}/?auto_phone={phone}",
-          "include_aliases": {"external_id": [phone]},
-          "target_channel": "push",
-      }
-      try:
-        res = requests.post(
-            "https://onesignal.com/api/v1/notifications",
-            headers=headers,
-            json=payload,
-            timeout=5,
-        )
-        return res.status_code == 200
-      except Exception:
-        return False
+def send_single_push(phone):
+  payload = {
+      "app_id": app_id,
+      "headings": {"el": full_title, "en": full_title},
+      "contents": {"el": message_text, "en": message_text},
+      "url": f"{base_url}/?auto_phone={phone}",
+      "include_aliases": {"external_id": [phone]},
+      "target_channel": "push",
+      # --- ΠΡΟΣΘΗΚΗ ΜΟΝΑΔΙΚΟΥ ID ΓΙΑ ΝΑ ΜΗΝ ΑΝΤΙΚΑΘΙΣΤΑΤΑΙ ΤΟ ΠΡΟΗΓΟΥΜΕΝΟ NOTIFICATION ---
+      "collapse_id": f"msg_{int(time.time())}",
+  }
+  try:
+    res = requests.post(
+        "https://onesignal.com/api/v1/notifications",
+        headers=headers,
+        json=payload,
+        timeout=5,
+    )
+    return res.status_code == 200
+  except Exception:
+    return False
 
     with ThreadPoolExecutor(max_workers=20) as executor:
       results = list(executor.map(send_single_push, unique_phones))
