@@ -109,11 +109,9 @@ def send_single_push(phone):
       "headings": {"el": full_title, "en": full_title},
       "contents": {"el": message_text, "en": message_text},
       "url": f"{base_url}/?auto_phone={phone}",
+      "web_url": f"{base_url}/?auto_phone={phone}",
       "include_aliases": {"external_id": [phone]},
       "target_channel": "push",
-      # --- ΣΩΣΤΕΣ ΠΑΡΑΜΕΤΡΟΙ ONESIGNAL ΓΙΑ ΝΑ ΜΗΝ ΑΝΤΙΚΑΘΙΣΤΑΝΤΑΙ ΟΙ ΕΙΔΟΠΟΙΗΣΕΙΣ ---
-      "web_push_topic": f"msg_{int(time.time())}",
-      "android_group": f"msg_{int(time.time())}",
   }
   try:
     res = requests.post(
