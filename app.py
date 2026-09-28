@@ -103,26 +103,28 @@ def send_onesignal_notification(
         )
     )
 
-def send_single_push(phone):
-  payload = {
-      "app_id": app_id,
-      "headings": {"el": full_title, "en": full_title},
-      "contents": {"el": message_text, "en": message_text},
-      "url": f"{base_url}/?auto_phone={phone}",
-      "web_url": f"{base_url}/?auto_phone={phone}",
-      "include_aliases": {"external_id": [phone]},
-      "target_channel": "push",
-  }
-  try:
-    res = requests.post(
-        "https://onesignal.com/api/v1/notifications",
-        headers=headers,
-        json=payload,
-        timeout=5,
-    )
-    return res.status_code == 200
-  except Exception:
-    return False
+    # Εσωτερική συνάρτηση για αποστολή σε 1 γονέα
+    def send_single_push(phone):
+      payload = {
+          "app_id": app_id,
+          "headings": {"el": full_title, "en": full_title},
+          "contents": {"el": message_text, "en": message_text},
+          "url": f"{base_url}/?auto_phone={phone}",
+          "include_aliases": {"external_id": [phone]},
+          "target_channel": "push",
+      }
+      try:
+        res = requests.post(
+            "https://onesignal.com/api/v1/notifications",
+            headers=headers,
+            json=payload,
+            timeout=5,
+        )
+        return res.status_code == 200
+      except Exception:
+        return False
+
+    # Εκτέλεση των κλήσεων παράλληλα μέσω Threads
     with ThreadPoolExecutor(max_workers=20) as executor:
       results = list(executor.map(send_single_push, unique_phones))
 
