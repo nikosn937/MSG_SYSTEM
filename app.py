@@ -73,66 +73,63 @@ def check_onesignal_registration(phone):
 
 
 # --- 4. ΑΠΟΣΤΟΛΗ PUSH NOTIFICATION ΜΕΣΩ ONESIGNAL API (PARALLEL) ---
-def send_onesignal_notification(
-    school_name, title, message_text, target_phones=None
-):
-  """Στέλνει Push Notifications παράλληλα για ταχύτητα και 100% λειτουργικό auto-login."""
-  app_id = st.secrets.get("ONESIGNAL_APP_ID")
-  rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
+def send_onesignal_notification(school_name, title, message_text, target_phones=None):
+    """Στέλνει Push Notifications παράλληλα με μοναδικό web_push_topic για στοίβαξη ειδοποιήσεων."""
+    app_id = st.secrets.get("ONESIGNAL_APP_ID")
+    rest_key = st.secrets.get("ONESIGNAL_REST_KEY")
 
-  if not app_id or not rest_key:
-    st.warning("⚠️ Λείπουν τα διαπιστευτήρια του OneSignal στα Secrets.")
-    return False
-
-  headers = {
-      "Content-Type": "application/json; charset=utf-8",
-      "Authorization": f"Basic {rest_key}",
-  }
-
-  base_url = "https://msgsys.streamlit.app"
-  full_title = (
-      f"[{school_name}] {title}" if school_name.strip() else f"{title}"
-  )
-
-  if target_phones and len(target_phones) > 0:
-    unique_phones = list(
-        set(
-            str(p).strip().replace("+357", "").replace(" ", "").replace("-", "")
-            for p in target_phones
-            if p
-        )
-    )
-
-    # Εσωτερική συνάρτηση (πρέπει να βρίσκεται ΜΕΣΑ στο if)
-    def send_single_push(phone):
-      unique_url = f"{base_url}/?auto_phone={phone}&_ts={int(time.time() * 1000)}"
-      payload = {
-          "app_id": app_id,
-          "headings": {"el": full_title, "en": full_title},
-          "contents": {"el": message_text, "en": message_text},
-          "url": unique_url,
-          "include_aliases": {"external_id": [phone]},
-          "target_channel": "push",
-      }
-      try:
-        res = requests.post(
-            "https://onesignal.com/api/v1/notifications",
-            headers=headers,
-            json=payload,
-            timeout=5,
-        )
-        return res.status_code == 200
-      except Exception:
+    if not app_id or not rest_key:
+        st.warning("⚠️ Λείπουν τα διαπιστευτήρια του OneSignal στα Secrets.")
         return False
 
-    # Εκτέλεση των κλήσεων παράλληλα μέσω Threads (στην ίδια στοίχιση με τη send_single_push)
-    with ThreadPoolExecutor(max_workers=20) as executor:
-      results = list(executor.map(send_single_push, unique_phones))
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Authorization": f"Basic {rest_key}"
+    }
 
-    return any(results)
-  else:
-    st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
-    return False
+    base_url = "https://msgsys.streamlit.app"
+    full_title = f"[{school_name}] {title}" if school_name.strip() else f"{title}"
+
+    if target_phones and len(target_phones) > 0:
+        unique_phones = list(set(
+            str(p).strip().replace("+357", "").replace(" ", "").replace("-", "") 
+            for p in target_phones if p
+        ))
+
+        def send_single_push(phone):
+            # Δημιουργία μοναδικού ID ανά αποστολή
+            unique_tag = f"msg_{int(time.time_ns())}"
+            unique_url = f"{base_url}/?auto_phone={phone}&_ts={int(time.time()*1000)}"
+
+            payload = {
+                "app_id": app_id,
+                "headings": {"el": full_title, "en": full_title},
+                "contents": {"el": message_text, "en": message_text},
+                "url": unique_url,
+                "include_aliases": {"external_id": [phone]},
+                "target_channel": "push",
+                # Ορίζουμε μοναδικό topic για να μην αντικαθιστά ο browser τα παλιά notifications
+                "web_push_topic": unique_tag
+            }
+            try:
+                res = requests.post(
+                    "https://onesignal.com/api/v1/notifications", 
+                    headers=headers, 
+                    json=payload, 
+                    timeout=5
+                )
+                return res.status_code == 200
+            except Exception:
+                return False
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            results = list(executor.map(send_single_push, unique_phones))
+
+        return any(results)
+    else:
+        st.warning("⚠️ Δεν βρέθηκαν τηλέφωνα παραληπτών για την αποστολή Push.")
+        return False
+
 # --- 5. SESSION STATE & AUTO-LOGIN VIA URL ---
 if "user_role" not in st.session_state:
   st.session_state["user_role"] = None
