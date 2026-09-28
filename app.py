@@ -104,8 +104,6 @@ def send_onesignal_notification(
     )
 
     # Εσωτερική συνάρτηση για αποστολή σε 1 γονέα
-   import time
-
 
 def send_single_push(phone):
   # Prosthetoume to _ts (timestamp) sto URL gia na theorei o browser kathe notification os monadiko url
