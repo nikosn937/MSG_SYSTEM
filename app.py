@@ -12,7 +12,7 @@ from streamlit_tree_select import tree_select
 st.set_page_config(
     page_title="MsgSys",
     page_icon="static/icon-192.png",
-    layout="wide",  # ή "centered" αν προτιμάς σταθερό στενό πλάτος
+    layout="centered",  # ή "centered" αν προτιμάς σταθερό στενό πλάτος
     initial_sidebar_state="expanded"
 )
 
