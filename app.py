@@ -8,14 +8,20 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_tree_select import tree_select
 
-st.set_page_config(page_title="MsgSys", page_icon="💬")
 
-# Injection των PWA & iOS Meta Tags
+# Ορισμός τίτλου και εικονιδίου εφαρμογής για το Streamlit
+st.set_page_config(
+    page_title="MsgSys",
+    page_icon="static/icon-192.png",
+    layout="centered"
+)
+
+# Κρυφή εισαγωγή για iOS / PWA Meta
 st.markdown(
     """
     <div style="display: none;">
-        <link rel="manifest" href="/app/static/manifest.json">
-        <link rel="apple-touch-icon" href="/app/static/icon-192.png">
+        <link rel="manifest" href="static/manifest.json">
+        <link rel="apple-touch-icon" href="static/icon-192.png">
         <meta name="theme-color" content="#4CAF50">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,6 +30,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
     page_title="Σχολικό Portal Μηνυμάτων", page_icon="💬", layout="wide"
