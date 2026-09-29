@@ -13,7 +13,7 @@ from streamlit_tree_select import tree_select
 
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
-    page_title="Σχολικό Portal Μηνυμάτων", page_icon="💬", layout="wide"
+    page_title="Σχολικό Portal Μηνυμάτων",page_icon="static/icon-192.png", layout="wide"
 )
 
 
