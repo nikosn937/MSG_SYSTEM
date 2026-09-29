@@ -7,6 +7,25 @@ import time
 import streamlit as st
 from streamlit_tree_select import tree_select
 
+st.set_page_config(page_title="MsgSys", page_icon="💬")
+
+# Injection των PWA & iOS Meta Tags
+st.markdown(
+    """
+    <head>
+        <link rel="manifest" href="./app/static/manifest.json">
+        <meta name="theme-color" content="#4CAF50">
+        
+        <!-- Tags για iOS Safari -->
+        <link rel="apple-touch-icon" href="./app/static/icon-192.png">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="MsgSys">
+    </head>
+    """,
+    unsafe_allow_html=True
+)
+
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
     page_title="Σχολικό Portal Μηνυμάτων", page_icon="💬", layout="wide"
