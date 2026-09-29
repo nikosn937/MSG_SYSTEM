@@ -11,44 +11,18 @@ from streamlit_tree_select import tree_select
 st.set_page_config(page_title="MsgSys", page_icon="💬")
 
 # Injection των PWA & iOS Meta Tags
-components.html(
+st.markdown(
     """
-    <script>
-        const head = window.parent.document.getElementsByTagName('head')[0];
-        
-        // Manifest Link
-        const manifestLink = window.parent.document.createElement('link');
-        manifestLink.rel = 'manifest';
-        manifestLink.href = './app/static/manifest.json';
-        head.appendChild(manifestLink);
-
-        // Apple Touch Icon
-        const appleIcon = window.parent.document.createElement('link');
-        appleIcon.rel = 'apple-touch-icon';
-        appleIcon.href = './app/static/icon-192.png';
-        head.appendChild(appleIcon);
-
-        // Meta Mobile Capable
-        const metaCapable = window.parent.document.createElement('meta');
-        metaCapable.name = 'apple-mobile-web-app-capable';
-        metaCapable.content = 'yes';
-        head.appendChild(metaCapable);
-
-        // Meta Status Bar
-        const metaStatus = window.parent.document.createElement('meta');
-        metaStatus.name = 'apple-mobile-web-app-status-bar-style';
-        metaStatus.content = 'black-translucent';
-        head.appendChild(metaStatus);
-
-        // Meta Title
-        const metaTitle = window.parent.document.createElement('meta');
-        metaTitle.name = 'apple-mobile-web-app-title';
-        metaTitle.content = 'MsgSys';
-        head.appendChild(metaTitle);
-    </script>
+    <div style="display: none;">
+        <link rel="manifest" href="/app/static/manifest.json">
+        <link rel="apple-touch-icon" href="/app/static/icon-192.png">
+        <meta name="theme-color" content="#4CAF50">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="MsgSys">
+    </div>
     """,
-    height=0,
-    width=0,
+    unsafe_allow_html=True
 )
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
