@@ -9,11 +9,11 @@ import streamlit.components.v1 as components
 from streamlit_tree_select import tree_select
 
 
-# Ορισμός τίτλου και εικονιδίου εφαρμογής για το Streamlit
 st.set_page_config(
     page_title="MsgSys",
     page_icon="static/icon-192.png",
-    layout="centered"
+    layout="wide",  # ή "centered" αν προτιμάς σταθερό στενό πλάτος
+    initial_sidebar_state="expanded"
 )
 
 # Κρυφή εισαγωγή για iOS / PWA Meta
