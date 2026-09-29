@@ -16,20 +16,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Κρυφή εισαγωγή για iOS / PWA Meta
-st.markdown(
-    """
-    <div style="display: none;">
-        <link rel="manifest" href="static/manifest.json">
-        <link rel="apple-touch-icon" href="static/icon-192.png">
-        <meta name="theme-color" content="#4CAF50">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="MsgSys">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
 
 # --- 1. ΡΥΘΜΙΣΗ ΣΕΛΙΔΑΣ ---
 st.set_page_config(
