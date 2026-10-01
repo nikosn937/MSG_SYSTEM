@@ -27,7 +27,7 @@ def get_db_connection():
     password = st.secrets["DB_PASSWORD"]
 
     conn_str = (
-        "DRIVER={FreeTDS};"
+       "DRIVER=/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so;"
         f"SERVER={server};"
         f"PORT={port};"
         f"DATABASE={database};"
