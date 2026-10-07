@@ -730,28 +730,32 @@ elif st.session_state["user_role"] == "Parent":
                )
             ORDER BY A.CreatedAt DESC
         """
-        df_msgs = pd.read_sql(
-            query_messages,
-            conn,
-            params=[parent_id, parent_id, parent_id, parent_id],
-        )
+        
+        # Χρήση cursor αντί για pd.read_sql για αποφυγή προβλημάτων με τα column names
+        cursor = conn.cursor()
+        cursor.execute(query_messages, (parent_id, parent_id, parent_id, parent_id))
+        messages = cursor.fetchall()
         conn.close()
 
-        if not df_msgs.empty:
-            # Εξασφαλίζουμε ότι τα ονόματα των στηλών είναι καθαρά από κενά
-            df_msgs.columns = [str(c).strip() for c in df_msgs.columns]
-
-            for idx, row in df_msgs.iterrows():
+        if messages:
+            for idx, msg in enumerate(messages):
                 is_latest = (idx == 0)
 
-                # Ασφαλής ανάκτηση τιμών
-                title = row.get('Title') or row.get('title') or ''
-                created_at = row.get('CreatedAt') or row.get('createdat') or ''
-                content = row.get('Content') or row.get('content') or ''
-                sent_by = row.get('SentBy') or row.get('sentby') or ''
-                class_name = row.get('ClassName') or row.get('classname') or ''
+                # Ανάκτηση τιμών είτε η pymssql επιστρέφει dict είτε tuple
+                if isinstance(msg, dict):
+                    title = msg.get("Title") or msg.get("title") or ""
+                    created_at = msg.get("CreatedAt") or msg.get("createdat") or ""
+                    content = msg.get("Content") or msg.get("content") or ""
+                    sent_by = msg.get("SentBy") or msg.get("sentby") or ""
+                    class_name = msg.get("ClassName") or msg.get("classname") or ""
+                else:
+                    title = msg[1] if len(msg) > 1 else ""
+                    content = msg[2] if len(msg) > 2 else ""
+                    sent_by = msg[3] if len(msg) > 3 else ""
+                    created_at = msg[4] if len(msg) > 4 else ""
+                    class_name = msg[5] if len(msg) > 5 else ""
 
-                target_str = class_name if (pd.notnull(class_name) and class_name) else 'Στοχευμένο/Γενικό'
+                target_str = class_name if class_name else "Στοχευμένο/Γενικό"
 
                 with st.expander(f"📩 {title} ({created_at})", expanded=is_latest):
                     st.write(content)
