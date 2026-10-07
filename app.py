@@ -33,14 +33,14 @@ def get_db_connection():
             user=user,
             password=password,
             database=database,
-            as_dict=True  # Επιστρέφει τα αποτελέσματα ως dictionary (πολύ βολικό)
-    )
-    return conn
+            as_dict=True
+        )
+        return conn
     except Exception as e:
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
 
-
+    
 # --- 3. ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
   """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
