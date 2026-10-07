@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 import pandas as pd
 import pyodbc
+import pymssql
 import requests
 import time
 import streamlit as st
@@ -26,21 +27,18 @@ def get_db_connection():
     user = st.secrets["DB_USER"]
     password = st.secrets["DB_PASSWORD"]
 
-    conn_str = (
-       "DRIVER=/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so;"
-        f"SERVER={server};"
-        f"PORT={port};"
-        f"DATABASE={database};"
-        f"UID={user};"
-        f"PWD={password};"
-        "TDS_Version=7.4;"
-    )
-
-    conn = pyodbc.connect(conn_str)
-    return conn
-  except Exception as e:
-    st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
-    return None
+    conn = pymssql.connect(
+            server=server,
+            port=port,
+            user=user,
+            password=password,
+            database=database,
+            as_dict=True  # Επιστρέφει τα αποτελέσματα ως dictionary (πολύ βολικό)
+        )
+        return conn
+    except Exception as e:
+        st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
+        return None
 
 
 # --- 3. ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
