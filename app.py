@@ -35,7 +35,7 @@ def get_db_connection():
             database=database,
             as_dict=True  # Επιστρέφει τα αποτελέσματα ως dictionary (πολύ βολικό)
         )
-        return conn
+    return conn
     except Exception as e:
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
