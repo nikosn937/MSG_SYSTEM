@@ -4,3 +4,4 @@ pandas
 requests
 openpyxl
 streamlit-tree-select
+pymssql
