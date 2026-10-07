@@ -342,3 +342,411 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                 "label": (
                                     f"{row['StudentID']} - {row['LastName']}"
                                     f" {row['FirstName']}"
+                                ),
+                                "value": f"STUDENT_{row['ClassID']}_{row['StudentID']}",
+                            }
+                            class_node["children"].append(student_node)
+
+                        grade_node["children"].append(class_node)
+
+                    students_node["children"].append(grade_node)
+
+                nodes.append(students_node)
+
+        return_select = tree_select(
+            nodes, checked=[], expand_on_click=True, no_cascade=False
+        )
+        selected_values = return_select.get("checked", [])
+
+        content = st.text_area("Περιεχόμενο Μηνύματος", height=150)
+
+        if st.button("🚀 Αποστολή Μηνύματος", use_container_width=True):
+            if not title or not content:
+                st.warning("Παρακαλώ συμπληρώστε τίτλο και περιεχόμενο.")
+            elif not selected_values:
+                st.warning(
+                    "Παρακαλώ επιλέξτε τουλάχιστον έναν παραλήπτη από το δέντρο."
+                )
+            else:
+                selected_student_ids = []
+
+                if "ALL_STUDENTS" in selected_values:
+                    target_audience = "ALL"
+                    db_class_id = None
+                else:
+                    target_audience = "STUDENTS"
+                    db_class_id = None
+
+                    for val in selected_values:
+                        if str(val).startswith("STUDENT_"):
+                            st_id = int(str(val).split("_")[-1])
+                            selected_student_ids.append(st_id)
+
+                selected_student_ids = list(set(selected_student_ids))
+
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+
+                    insert_query = """
+                        INSERT INTO Announcements (Title, Content, TargetAudience, ClassID, SentBy, CreatedAt)
+                        VALUES (%s, %s, %s, %s, %s, GETDATE());
+                    """
+                    cursor.execute(
+                        insert_query,
+                        (
+                            title,
+                            content,
+                            target_audience,
+                            db_class_id,
+                            st.session_state["user_info"]["name"],
+                        ),
+                    )
+                    conn.commit()
+
+                    cursor.execute("SELECT @@IDENTITY AS NewID")
+                    identity_row = cursor.fetchone()
+                    announcement_id = identity_row["NewID"] if isinstance(identity_row, dict) else identity_row[0]
+
+                    target_phones = []
+
+                    if target_audience == "ALL":
+                        query_phones = """
+                            SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(Phone, '+357', ''), ' ', ''), '-', ''))) AS Phone
+                            FROM Parents WHERE IsActive = 1 OR IsActive IS NULL
+                        """
+                        cursor.execute(query_phones)
+                        rows = cursor.fetchall()
+                        target_phones = [r["Phone"] if isinstance(r, dict) else r[0] for r in rows if (r["Phone"] if isinstance(r, dict) else r[0])]
+                    else:
+                        for st_id in selected_student_ids:
+                            cursor.execute(
+                                "INSERT INTO AnnouncementStudents (AnnouncementID, StudentID) VALUES (%s, %s)",
+                                (announcement_id, st_id),
+                            )
+
+                        if selected_student_ids:
+                            placeholders = ",".join(["%s"] * len(selected_student_ids))
+                            query_phones = f"""
+                                SELECT DISTINCT LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(P.Phone, '+357', ''), ' ', ''), '-', ''))) AS Phone
+                                FROM Parents P
+                                JOIN StudentParents SP ON P.ParentID = SP.ParentID
+                                WHERE SP.StudentID IN ({placeholders})
+                            """
+                            cursor.execute(query_phones, selected_student_ids)
+                            rows = cursor.fetchall()
+                            target_phones = [r["Phone"] if isinstance(r, dict) else r[0] for r in rows if (r["Phone"] if isinstance(r, dict) else r[0])]
+
+                        conn.commit()
+
+                    conn.close()
+                    st.success("✅ Το μήνυμα καταχωρήθηκε επιτυχώς στη βάση!")
+
+                    success = send_onesignal_notification(
+                        school_name, title, content, target_phones
+                    )
+                    if success:
+                        st.info("🔔 Η ειδοποίηση Push απεστάλη επιτυχώς στους γονείς!")
+                    else:
+                        st.error("❌ Αποτυχία αποστολής Push Notification.")
+
+        st.markdown("---")
+        st.subheader("📜 Ιστορικό Απεσταλμένων Μηνύμάτων")
+        conn = get_db_connection()
+        if conn:
+            query_history = """
+                SELECT A.AnnouncementID, A.Title, A.TargetAudience, C.ClassName, A.SentBy, A.CreatedAt
+                FROM Announcements A
+                LEFT JOIN Classes C ON A.ClassID = C.ClassID
+                ORDER BY A.CreatedAt DESC
+            """
+            df_history = pd.read_sql(query_history, conn)
+            conn.close()
+            st.dataframe(df_history, use_container_width=True)
+
+    # --- TAB 2: ΕΙΣΑΓΩΓΗ EXCEL (SMART SYNC) ---
+    if st.session_state["user_role"] == "Admin":
+        with admin_tab2:
+            st.header("📊 Μαζική Εισαγωγή & Ενημέρωση Δεδομένων από Excel")
+            uploaded_file = st.file_uploader(
+                "Μεταφόρτωση Αρχείου Excel", type=["xlsx", "xls"]
+            )
+
+            if uploaded_file is not None:
+                df = pd.read_excel(uploaded_file)
+                st.dataframe(df.head(), use_container_width=True)
+
+                if st.button(
+                    "🔄 Συγχρονισμός Δεδομένων στη Βάση", use_container_width=True
+                ):
+                    conn = get_db_connection()
+                    if conn:
+                        cursor = conn.cursor()
+                        new_students, existing_students, updated_parents, new_parents = (
+                            0,
+                            0,
+                            0,
+                            0,
+                        )
+
+                        try:
+                            for idx, row in df.iterrows():
+                                class_name = str(row["ClassName"]).strip()
+                                student_fn = str(row["StudentFirstName"]).strip()
+                                student_ln = str(row["StudentLastName"]).strip()
+
+                                cursor.execute(
+                                    "SELECT ClassID FROM Classes WHERE ClassName = %s",
+                                    (class_name,),
+                                )
+                                class_row = cursor.fetchone()
+                                if class_row:
+                                    class_id = class_row["ClassID"] if isinstance(class_row, dict) else class_row[0]
+                                else:
+                                    cursor.execute(
+                                        "INSERT INTO Classes (ClassName, AcademicYear) VALUES (%s, '2025-2026')",
+                                        (class_name,),
+                                    )
+                                    cursor.execute("SELECT @@IDENTITY AS NewID")
+                                    identity_row = cursor.fetchone()
+                                    class_id = identity_row["NewID"] if isinstance(identity_row, dict) else identity_row[0]
+
+                                cursor.execute(
+                                    """
+                                        SELECT StudentID FROM Students 
+                                        WHERE FirstName = %s AND LastName = %s AND ClassID = %s
+                                    """,
+                                    (student_fn, student_ln, class_id),
+                                )
+                                student_row = cursor.fetchone()
+
+                                if student_row:
+                                    student_id = student_row["StudentID"] if isinstance(student_row, dict) else student_row[0]
+                                    existing_students += 1
+                                else:
+                                    cursor.execute(
+                                        "INSERT INTO Students (FirstName, LastName, ClassID) VALUES (%s, %s, %s)",
+                                        (student_fn, student_ln, class_id),
+                                    )
+                                    cursor.execute("SELECT @@IDENTITY AS NewID")
+                                    identity_row = cursor.fetchone()
+                                    student_id = identity_row["NewID"] if isinstance(identity_row, dict) else identity_row[0]
+                                    new_students += 1
+
+                                parents_data = [
+                                    (
+                                        row.get("Parent1_FirstName"),
+                                        row.get("Parent1_LastName"),
+                                        row.get("Parent1_Phone"),
+                                    ),
+                                    (
+                                        row.get("Parent2_FirstName"),
+                                        row.get("Parent2_LastName"),
+                                        row.get("Parent2_Phone"),
+                                    ),
+                                ]
+
+                                for p_fn, p_ln, raw_phone in parents_data:
+                                    if pd.notnull(raw_phone):
+                                        p_fn_str = str(p_fn).strip() if pd.notnull(p_fn) else ""
+                                        p_ln_str = str(p_ln).strip() if pd.notnull(p_ln) else ""
+
+                                        clean_phone = (
+                                            str(int(raw_phone)).strip()
+                                            if str(raw_phone).replace(".0", "").isdigit()
+                                            else str(raw_phone).strip()
+                                        )
+                                        clean_phone = (
+                                            clean_phone.replace("+357", "")
+                                            .replace(" ", "")
+                                            .replace("-", "")
+                                        )
+
+                                        if clean_phone and clean_phone.lower() != "nan":
+                                            cursor.execute(
+                                                """
+                                                    SELECT P.ParentID, P.Phone 
+                                                    FROM Parents P
+                                                    JOIN StudentParents SP ON P.ParentID = SP.ParentID
+                                                    WHERE SP.StudentID = %s AND P.FirstName = %s AND P.LastName = %s
+                                                """,
+                                                (student_id, p_fn_str, p_ln_str),
+                                            )
+                                            parent_match = cursor.fetchone()
+
+                                            if parent_match:
+                                                parent_id = parent_match["ParentID"] if isinstance(parent_match, dict) else parent_match[0]
+                                                current_phone = parent_match["Phone"] if isinstance(parent_match, dict) else parent_match[1]
+
+                                                if current_phone != clean_phone:
+                                                    cursor.execute(
+                                                        """
+                                                            UPDATE Parents 
+                                                            SET Phone = %s, PasswordHash = %s 
+                                                            WHERE ParentID = %s
+                                                        """,
+                                                        (clean_phone, clean_phone, parent_id),
+                                                    )
+                                                    updated_parents += 1
+                                            else:
+                                                cursor.execute(
+                                                    "SELECT ParentID FROM Parents WHERE Phone = %s",
+                                                    (clean_phone,),
+                                                )
+                                                existing_phone_row = cursor.fetchone()
+
+                                                if existing_phone_row:
+                                                    parent_id = existing_phone_row["ParentID"] if isinstance(existing_phone_row, dict) else existing_phone_row[0]
+                                                else:
+                                                    cursor.execute(
+                                                        """
+                                                            INSERT INTO Parents (FirstName, LastName, Phone, PasswordHash) 
+                                                            VALUES (%s, %s, %s, %s)
+                                                        """,
+                                                        (
+                                                            p_fn_str,
+                                                            p_ln_str,
+                                                            clean_phone,
+                                                            clean_phone,
+                                                        ),
+                                                    )
+                                                    cursor.execute("SELECT @@IDENTITY AS NewID")
+                                                    identity_row = cursor.fetchone()
+                                                    parent_id = identity_row["NewID"] if isinstance(identity_row, dict) else identity_row[0]
+                                                    new_parents += 1
+
+                                                cursor.execute(
+                                                    """
+                                                        IF NOT EXISTS (SELECT 1 FROM StudentParents WHERE StudentID=%s AND ParentID=%s)
+                                                        INSERT INTO StudentParents (StudentID, ParentID) VALUES (%s, %s)
+                                                    """,
+                                                    (student_id, parent_id, student_id, parent_id),
+                                                )
+
+                            conn.commit()
+                            st.success("🎉 Ο συγχρονισμός ολοκληρώθηκε με επιτυχία!")
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"❌ Σφάλμα: {e}")
+                        finally:
+                            conn.close()
+
+# --- 8. ΠΟΡΤΑΛ ΓΟΝΕΑ ---
+elif st.session_state["user_role"] == "Parent":
+    parent_id = st.session_state["user_info"]["id"]
+    parent_name = st.session_state["user_info"]["name"]
+    parent_phone = st.session_state["user_info"].get("phone", "")
+
+    st.sidebar.title("💬 Portal Μηνυμάτων")
+    st.sidebar.write(f"👤 Γονέας: **{parent_name}**")
+
+    vercel_bridge_url = f"https://msg1-system.vercel.app/?phone={urllib.parse.quote(parent_phone)}"
+    is_subscribed = check_onesignal_registration(parent_phone)
+
+    if not is_subscribed:
+        st.info(
+            "🔔 **Ενεργοποίηση Ειδοποιήσεων:** Για να λαμβάνετε άμεσες"
+            " ειδοποιήσεις στο κινητό σας όταν στέλνει το σχολείο νέα μήνυματα,"
+            " πατήστε το παρακάτω κουμπί:"
+        )
+        st.link_button(
+            "📲 Ενεργοποίηση Ειδοποιήσεων στο Κινητό",
+            vercel_bridge_url,
+            use_container_width=True,
+        )
+        st.markdown("---")
+
+    st.sidebar.markdown("---")
+    st.sidebar.caption("🔔 **Ειδοποιήσεις**")
+    st.sidebar.link_button(
+        "📲 Ρυθμίσεις Ειδοποιήσεων", vercel_bridge_url, use_container_width=True
+    )
+
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🚪 Αποσύνδεση"):
+        logout()
+
+    st.header("📥 Εισερχόμενα Μηνύματα")
+
+    conn = get_db_connection()
+    if conn:
+        auto_read_query = """
+            INSERT INTO ReadReceipts (AnnouncementID, ParentID, ReadAt)
+            SELECT A.AnnouncementID, %s, GETDATE()
+            FROM Announcements A
+            WHERE (
+                A.TargetAudience = 'ALL' 
+                OR (A.TargetAudience LIKE 'GRADE_%%' AND A.TargetAudience = (
+                    SELECT 'GRADE_' + SUBSTRING(C.ClassName, 1, 1) 
+                    FROM Students S JOIN Classes C ON S.ClassID = C.ClassID 
+                    JOIN StudentParents SP ON S.StudentID = SP.StudentID WHERE SP.ParentID = %s
+                ))
+                OR A.ClassID IN (
+                    SELECT S.ClassID FROM Students S JOIN StudentParents SP ON S.StudentID = SP.StudentID WHERE SP.ParentID = %s
+                )
+                OR A.AnnouncementID IN (
+                    SELECT ANS.AnnouncementID FROM AnnouncementStudents ANS 
+                    JOIN StudentParents SP ON ANS.StudentID = SP.StudentID WHERE SP.ParentID = %s
+                )
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM ReadReceipts R WHERE R.AnnouncementID = A.AnnouncementID AND R.ParentID = %s
+            )
+        """
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                auto_read_query,
+                (parent_id, parent_id, parent_id, parent_id, parent_id),
+            )
+            conn.commit()
+        except Exception:
+            pass
+
+        query_messages = """
+            SELECT DISTINCT A.AnnouncementID, A.Title, A.Content, A.SentBy, A.CreatedAt, C.ClassName, R.ReadAt
+            FROM Announcements A
+            LEFT JOIN Classes C ON A.ClassID = C.ClassID
+            LEFT JOIN ReadReceipts R ON A.AnnouncementID = R.AnnouncementID AND R.ParentID = %s
+            WHERE A.TargetAudience = 'ALL' 
+               OR (A.TargetAudience LIKE 'GRADE_%%' AND A.TargetAudience IN (
+                   SELECT 'GRADE_' + LEFT(C2.ClassName, 1)
+                   FROM Students S2 
+                   JOIN Classes C2 ON S2.ClassID = C2.ClassID
+                   JOIN StudentParents SP2 ON S2.StudentID = SP2.StudentID
+                   WHERE SP2.ParentID = %s
+               ))
+               OR A.ClassID IN (
+                   SELECT S.ClassID 
+                   FROM Students S
+                   JOIN StudentParents SP ON S.StudentID = SP.StudentID
+                   WHERE SP.ParentID = %s
+               )
+               OR A.AnnouncementID IN (
+                   SELECT ANS.AnnouncementID 
+                   FROM AnnouncementStudents ANS
+                   JOIN StudentParents SP ON ANS.StudentID = SP.StudentID
+                   WHERE SP.ParentID = %s
+               )
+            ORDER BY A.CreatedAt DESC
+        """
+        df_msgs = pd.read_sql(
+            query_messages,
+            conn,
+            params=[parent_id, parent_id, parent_id, parent_id],
+        )
+        conn.close()
+
+        if not df_msgs.empty:
+            for idx, row in df_msgs.iterrows():
+                is_latest = idx == 0
+                with st.expander(
+                    f"📩 {row['Title']} ({row['CreatedAt']})", expanded=is_latest
+                ):
+                    st.write(row["Content"])
+                    st.caption(
+                        f"Αποστολέας: {row['SentBy']} | Προορισμός:"
+                        f" {row['ClassName'] if row['ClassName'] else 'Στοχευμένο/Γενικό'}"
+                    )
+        else:
+            st.info("Δεν υπάρχουν εισερχόμενα μηνύματα.")
