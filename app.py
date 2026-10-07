@@ -313,6 +313,9 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
             conn.close()
 
             if not df_students.empty:
+                # Καθαρισμός διπλότυπων εγγραφών
+                df_students = df_students.drop_duplicates(subset=['ClassID', 'StudentID'])
+
                 df_students["Grade"] = df_students["ClassName"].apply(
                     lambda x: str(x)[0].upper() if x else "Άλλο"
                 )
@@ -344,7 +347,8 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                                     f"{row['StudentID']} - {row['LastName']}"
                                     f" {row['FirstName']}"
                                 ),
-                                "value": f"STUDENT_{row['StudentID']}",
+                                # Χρήση ClassID + StudentID για εξασφάλιση μοναδικότητας στο tree_select
+                                "value": f"STUDENT_{row['ClassID']}_{row['StudentID']}",
                             }
                             class_node["children"].append(student_node)
 
@@ -380,7 +384,8 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
                     for val in selected_values:
                         if str(val).startswith("STUDENT_"):
-                            st_id = int(str(val).replace("STUDENT_", ""))
+                            # Λαμβάνουμε το StudentID από το τελευταίο τμήμα μετά το underscore
+                            st_id = int(str(val).split("_")[-1])
                             selected_student_ids.append(st_id)
 
                 selected_student_ids = list(set(selected_student_ids))
