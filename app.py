@@ -737,16 +737,24 @@ elif st.session_state["user_role"] == "Parent":
         )
         conn.close()
 
-        if not df_msgs.empty:
-            for idx, row in df_msgs.iterrows():
-                is_latest = idx == 0
-                with st.expander(
-                    f"📩 {row['Title']} ({row['CreatedAt']})", expanded=is_latest
-                ):
-                    st.write(row["Content"])
-                    st.caption(
-                        f"Αποστολέας: {row['SentBy']} | Προορισμός:"
-                        f" {row['ClassName'] if row['ClassName'] else 'Στοχευμένο/Γενικό'}"
-                    )
-        else:
-            st.info("Δεν υπάρχουν εισερχόμενα μηνύματα.")
+    if not df_msgs.empty:
+    # Εξασφαλίζουμε ότι τα ονόματα των στηλών είναι σε σωστή μορφή
+    df_msgs.columns = [c.strip() for c in df_msgs.columns]
+    
+    for idx, row in df_msgs.iterrows():
+        is_latest = (idx == 0)
+        
+        # Ασφαλής ανάκτηση τιμών ανεξάρτητα από πεζά/κεφαλαία
+        title = row.get('Title') or row.get('title') or ''
+        created_at = row.get('CreatedAt') or row.get('createdat') or ''
+        content = row.get('Content') or row.get('content') or ''
+        sent_by = row.get('SentBy') or row.get('sentby') or ''
+        class_name = row.get('ClassName') or row.get('classname') or ''
+        
+        target_str = class_name if (pd.notnull(class_name) and class_name) else 'Στοχευμένο/Γενικό'
+        
+        with st.expander(f"📩 {title} ({created_at})", expanded=is_latest):
+            st.write(content)
+            st.caption(f"Αποστολέας: {sent_by} | Προορισμός: {target_str}")
+else:
+    st.info("Δεν υπάρχουν εισερχόμενα μηνύματα.")
