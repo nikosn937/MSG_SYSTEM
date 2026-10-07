@@ -737,7 +737,7 @@ elif st.session_state["user_role"] == "Parent":
         )
         conn.close()
 
-    if not df_msgs.empty:
+        if not df_msgs.empty:
     # Εξασφαλίζουμε ότι τα ονόματα των στηλών είναι σε σωστή μορφή
     df_msgs.columns = [c.strip() for c in df_msgs.columns]
     
