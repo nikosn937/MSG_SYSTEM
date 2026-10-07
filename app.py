@@ -19,15 +19,16 @@ st.set_page_config(
 
 
 # --- 2. ΣΥΝΔΕΣΗ ΜΕ ΑΠΟΜΑΚΡΥΣΜΕΝΟ SQL SERVER (FreeTDS) ---
-def get_db_connection():
-  try:
-    server = st.secrets["DB_SERVER"]
-    port = st.secrets.get("DB_PORT", "1433")
-    database = st.secrets["DB_NAME"]
-    user = st.secrets["DB_USER"]
-    password = st.secrets["DB_PASSWORD"]
 
-    conn = pymssql.connect(
+def get_db_connection():
+    try:
+        server = st.secrets["DB_SERVER"]
+        port = int(st.secrets.get("DB_PORT", 1433))
+        database = st.secrets["DB_NAME"]
+        user = st.secrets["DB_USER"]
+        password = st.secrets["DB_PASSWORD"]
+
+        conn = pymssql.connect(
             server=server,
             port=port,
             user=user,
@@ -40,7 +41,7 @@ def get_db_connection():
         st.error(f"❌ Σφάλμα σύνδεσης με τον SQL Server: {e}")
         return None
 
-    
+
 # --- 3. ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΕΛΕΓΧΟΥ ΕΓΓΡΑΦΗΣ ONESIGNAL ---
 def check_onesignal_registration(phone):
   """Ελέγχει αν το τηλέφωνο του γονέα έχει ΕΝΕΡΓΗ συνδρομή στο OneSignal."""
