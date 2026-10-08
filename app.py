@@ -451,18 +451,46 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
                         st.error("❌ Αποτυχία αποστολής Push Notification.")
 
         st.markdown("---")
-        st.subheader("📜 Ιστορικό Απεσταλμένων Μηνύμάτων")
+        st.subheader("📜 Ιστορικό Απεσταλμένων Μηνύματος")
         conn = get_db_connection()
         if conn:
+            cursor = conn.cursor()
             query_history = """
                 SELECT A.AnnouncementID, A.Title, A.TargetAudience, C.ClassName, A.SentBy, A.CreatedAt
                 FROM Announcements A
                 LEFT JOIN Classes C ON A.ClassID = C.ClassID
                 ORDER BY A.CreatedAt DESC
             """
-            df_history = pd.read_sql(query_history, conn)
+            cursor.execute(query_history)
+            rows = cursor.fetchall()
             conn.close()
-            st.dataframe(df_history, use_container_width=True)
+
+            if rows:
+                formatted_data = []
+                for r in rows:
+                    if isinstance(r, dict):
+                        formatted_data.append({
+                            "ID": r.get("AnnouncementID") or r.get("announcementid"),
+                            "Τίτλος": r.get("Title") or r.get("title"),
+                            "Προορισμός": r.get("TargetAudience") or r.get("targetaudience"),
+                            "Τμήμα": r.get("ClassName") or r.get("classname") or "-",
+                            "Αποστολέας": r.get("SentBy") or r.get("sentby"),
+                            "Ημερομηνία": r.get("CreatedAt") or r.get("createdat"),
+                        })
+                    else:
+                        formatted_data.append({
+                            "ID": r[0],
+                            "Τίτλος": r[1],
+                            "Προορισμός": r[2],
+                            "Τμήμα": r[3] if r[3] else "-",
+                            "Αποστολέας": r[4],
+                            "Ημερομηνία": r[5],
+                        })
+                
+                df_history = pd.DataFrame(formatted_data)
+                st.dataframe(df_history, use_container_width=True)
+            else:
+                st.info("Δεν υπάρχει ιστορικό απεσταλμένων μηνυμάτων.")
 
     # --- TAB 2: ΕΙΣΑΓΩΓΗ EXCEL (SMART SYNC) ---
     if st.session_state["user_role"] == "Admin":
