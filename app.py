@@ -300,16 +300,38 @@ elif st.session_state["user_role"] in ["Admin", "Teacher"]:
 
         conn = get_db_connection()
         if conn:
+            cursor = conn.cursor()
             query_tree = """
                 SELECT DISTINCT S.StudentID, S.FirstName, S.LastName, C.ClassID, C.ClassName
                 FROM Students S
                 JOIN Classes C ON S.ClassID = C.ClassID
                 ORDER BY C.ClassName, S.LastName, S.FirstName
             """
-            df_students = pd.read_sql(query_tree, conn)
+            cursor.execute(query_tree)
+            rows_students = cursor.fetchall()
             conn.close()
 
-            if not df_students.empty:
+            if rows_students:
+                formatted_students = []
+                for r in rows_students:
+                    if isinstance(r, dict):
+                        formatted_students.append({
+                            "StudentID": r.get("StudentID") or r.get("studentid"),
+                            "FirstName": r.get("FirstName") or r.get("firstname") or "",
+                            "LastName": r.get("LastName") or r.get("lastname") or "",
+                            "ClassID": r.get("ClassID") or r.get("classid"),
+                            "ClassName": r.get("ClassName") or r.get("classname") or ""
+                        })
+                    else:
+                        formatted_students.append({
+                            "StudentID": r[0],
+                            "FirstName": r[1] if len(r) > 1 else "",
+                            "LastName": r[2] if len(r) > 2 else "",
+                            "ClassID": r[3] if len(r) > 3 else None,
+                            "ClassName": r[4] if len(r) > 4 else ""
+                        })
+
+                df_students = pd.DataFrame(formatted_students)
                 df_students = df_students.drop_duplicates(subset=['ClassID', 'StudentID'])
 
                 df_students["Grade"] = df_students["ClassName"].apply(
@@ -759,7 +781,6 @@ elif st.session_state["user_role"] == "Parent":
             ORDER BY A.CreatedAt DESC
         """
         
-        # Χρήση cursor αντί για pd.read_sql για αποφυγή προβλημάτων με τα column names
         cursor = conn.cursor()
         cursor.execute(query_messages, (parent_id, parent_id, parent_id, parent_id))
         messages = cursor.fetchall()
@@ -769,7 +790,6 @@ elif st.session_state["user_role"] == "Parent":
             for idx, msg in enumerate(messages):
                 is_latest = (idx == 0)
 
-                # Ανάκτηση τιμών είτε η pymssql επιστρέφει dict είτε tuple
                 if isinstance(msg, dict):
                     title = msg.get("Title") or msg.get("title") or ""
                     created_at = msg.get("CreatedAt") or msg.get("createdat") or ""
